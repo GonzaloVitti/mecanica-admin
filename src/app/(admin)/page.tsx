@@ -7,9 +7,8 @@ import StatisticsChart from "@/components/ecommerce/StatisticsChart";
 
 
 export const metadata: Metadata = {
-  title:
-    "Red Lenic | Administración",
-  description: "This is Next.js Home for TailAdmin Dashboard Template",
+  title: "Mecanica | Administración",
+  description: "Panel de administración Mecanica",
 };
 
 export default function Ecommerce() {

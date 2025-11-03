@@ -1,16 +1,18 @@
-# RedLenic Ecommerce - Panel de Administración
+# Mecanica - Panel de Administración
 
 Un sistema integral de administración para comercio electrónico desarrollado por PONT Solutions.
 
+## Mecanica - Panel de Administración
+
 ## Descripción
 
-RedLenic Ecommerce Admin es un panel de administración completo construido con Next.js y Tailwind CSS, diseñado específicamente para gestionar tiendas en línea. Proporciona a los administradores todas las herramientas necesarias para supervisar productos, pedidos, clientes, inventario y métricas de ventas en una solución robusta y escalable.
+Mecanica Admin es un panel de administración completo construido con Next.js y Tailwind CSS, diseñado específicamente para gestionar talleres mecánicos. Proporciona a los administradores todas las herramientas necesarias para supervisar servicios, repuestos, clientes, mecánicos y métricas de operación en una solución robusta y escalable.
 
-Desarrollado por PONT Solutions, esta plataforma utiliza las características más avanzadas de Next.js 15 como renderizado del lado del servidor (SSR), generación de sitios estáticos (SSG) e integración perfecta de rutas API. Combinado con React 19 y TypeScript, RedLenic Ecommerce Admin ofrece una experiencia de usuario fluida tanto para administradores como para operadores del comercio.
+Desarrollado por PONT Solutions, esta plataforma utiliza las características más avanzadas de Next.js 15 como renderizado del lado del servidor (SSR), generación de sitios estáticos (SSG) e integración perfecta de rutas API. Combinado con React 19 y TypeScript, Mecanica Admin ofrece una experiencia de usuario fluida tanto para administradores como para operadores del taller.
 
-## Tecnologías
+## Tecnologías Utilizadas
 
-RedLenic Ecommerce Admin está construido con:
+Mecanica Admin está construido con:
 
 - **Next.js 15**
 - **React 19**
@@ -32,7 +34,7 @@ RedLenic Ecommerce Admin está construido con:
 
 ### Requisitos previos
 
-Para comenzar a usar RedLenic Ecommerce Admin, asegúrate de tener:
+Para comenzar a usar Mecanica Admin, asegúrate de tener:
 
 - Node.js 18.x o posterior (recomendado usar Node.js 20.x o posterior)
 - NPM o Yarn como gestor de paquetes
@@ -41,8 +43,8 @@ Para comenzar a usar RedLenic Ecommerce Admin, asegúrate de tener:
 ### Clonar el repositorio
 
 ```bash
-git clone https://github.com/pontsolutions/redlenic-ecommerce-admin.git
-cd redlenic-ecommerce-admin
+git clone https://github.com/pontsolutions/mecanica-admin.git
+cd mecanica-admin
 ```
 
 ### Instalación de dependencias
@@ -61,9 +63,9 @@ npm run dev
 
 ## Integración con el backend
 
-RedLenic Ecommerce Admin se integra con una API RESTful desarrollada en Django. Para la conexión completa:
+Mecanica Admin se integra con una API RESTful desarrollada en Django. Para la conexión completa:
 
-1. Asegúrate de tener el servidor RedLenic Ecommerce en funcionamiento
+1. Asegúrate de tener el servidor Mecanica en funcionamiento
 2. Configura las variables de entorno para la conexión con la API
 3. Verifica la conexión a través del panel de administración
 
@@ -83,19 +85,19 @@ docker-compose logs -f
 
 ## Módulos del sistema
 
-RedLenic Ecommerce Admin incluye los siguientes módulos principales:
+Mecanica Admin incluye los siguientes módulos principales:
 
-- **Dashboard**: Vista general de métricas y actividad del sistema
-- **Productos**: Gestión completa del catálogo de productos
-- **Pedidos**: Administración de ventas y envíos
-- **Clientes**: Base de datos y perfiles de usuarios
-- **Inventario**: Control de stock y gestión de variantes
+- **Dashboard**: Vista general de métricas y actividad del taller
+- **Servicios**: Gestión completa de servicios mecánicos
+- **Repuestos**: Administración de inventario de repuestos
+- **Clientes**: Base de datos y perfiles de clientes
+- **Mecánicos**: Gestión de personal técnico
 - **Reportes**: Generación de informes personalizables
 - **Configuración**: Ajustes del sistema y perfiles de administrador
 
 ## Contribución
 
-PONT Solutions mantiene este proyecto como una solución propietaria para comercio electrónico. Para reportar problemas o sugerencias, contacta directamente con el equipo de desarrollo.
+PONT Solutions mantiene este proyecto como una solución propietaria para talleres mecánicos. Para reportar problemas o sugerencias, contacta directamente con el equipo de desarrollo.
 
 ## Soporte técnico
 
@@ -110,7 +112,4 @@ Para soporte técnico, contacta a PONT Solutions:
 
 ---
 
-Desarrollado con ❤️ por PONT Solutions# redlenic-admin
-
-
-Mira lo de la latitud y longitud en el add de branches
+Desarrollado con ❤️ por PONT Solutions

@@ -15,10 +15,10 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | Red Lenic',
-    default: 'Red Lenic | Administración',
+    template: '%s | Mecanica',
+    default: 'Mecanica | Administración',
   },
-  description: 'Sistema de administración Red Lenic',
+  description: 'Sistema de administración Mecanica',
 };
 
 export default function RootLayout({

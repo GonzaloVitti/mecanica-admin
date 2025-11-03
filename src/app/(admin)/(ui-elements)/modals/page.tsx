@@ -2,8 +2,8 @@ import React from "react";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Modals | Red Lenic",
-  description: "Página de modales de Red Lenic"
+  title: "Modals | Mecanica",
+  description: "Página de modales de Mecanica"
 };
 
 export default function Modals() {

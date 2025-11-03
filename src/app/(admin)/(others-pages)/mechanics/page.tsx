@@ -45,6 +45,17 @@ interface AlertState {
   message: string;
 }
 
+// Función para formatear fechas
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-MX', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 // Componente modal para confirmación
 const ConfirmModal = ({
   isOpen,
@@ -189,7 +200,7 @@ const MechanicsPage = () => {
     try {
       setLoading(true);
       const offset = (page - 1) * itemsPerPage;
-      let url = `/users/?limit=${itemsPerPage}&offset=${offset}&role=MECHANIC`;
+      let url = `/api/mechanics/?limit=${itemsPerPage}&offset=${offset}`;
       
       if (search.trim()) {
         url += `&search=${encodeURIComponent(search.trim())}`;
@@ -197,10 +208,6 @@ const MechanicsPage = () => {
 
       const data = await fetchApi<ApiResponse>(url, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-          'Content-Type': 'application/json',
-        },
       });
 
       if (data) {
@@ -221,7 +228,7 @@ const MechanicsPage = () => {
   // Función para eliminar mecánico
   const deleteMechanic = async (mechanicId: string) => {
     try {
-      const result = await fetchApi(`/users/${mechanicId}/`, {
+      const result = await fetchApi(`/api/users/${mechanicId}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${user?.access_token}`,
@@ -245,7 +252,7 @@ const MechanicsPage = () => {
   // Función para cambiar estado activo
   const toggleActiveStatus = async (mechanicId: string) => {
     try {
-      const data = await fetchApi(`/users/${mechanicId}/toggle_active_status/`, {
+      const data = await fetchApi(`/api/users/${mechanicId}/toggle_active_status/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user?.access_token}`,
@@ -268,7 +275,7 @@ const MechanicsPage = () => {
   // Función para cambiar estado verificado
   const toggleVerifiedStatus = async (mechanicId: string) => {
     try {
-      const data = await fetchApi(`/users/${mechanicId}/toggle_verified_status/`, {
+      const data = await fetchApi(`/api/users/${mechanicId}/toggle_verified_status/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${user?.access_token}`,
@@ -499,216 +506,174 @@ const MechanicsPage = () => {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableCell className="font-semibold">Nombre</TableCell>
-                <TableCell className="font-semibold">Email</TableCell>
-                <TableCell className="font-semibold">Teléfono</TableCell>
-                <TableCell className="font-semibold">Estado</TableCell>
-                <TableCell className="font-semibold">Verificado</TableCell>
-                <TableCell className="font-semibold">Fecha de Registro</TableCell>
-                <TableCell className="font-semibold">Acciones</TableCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <div className="max-w-full overflow-x-auto">
+          <div className="min-w-[1102px]">
+            <Table>
+              <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                      <span className="ml-2">Cargando mecánicos...</span>
-                    </div>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    ID
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Mecánico
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Email
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Teléfono
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Estado
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Verificado
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Fecha de registro
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Acciones
                   </TableCell>
                 </TableRow>
-              ) : mechanics.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    <div className="text-gray-500 dark:text-gray-400">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-12 w-12 mx-auto mb-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                        />
-                      </svg>
-                      <p className="text-lg font-medium">No hay mecánicos registrados</p>
-                      <p className="text-sm">Comienza agregando el primer mecánico</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                mechanics.map((mechanic) => (
-                  <TableRow key={mechanic.id}>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <div className="h-10 w-10 flex-shrink-0">
-                          {mechanic.profile_picture ? (
-                            <img
-                              className="h-10 w-10 rounded-full object-cover"
-                              src={mechanic.profile_picture}
-                              alt={`${mechanic.first_name} ${mechanic.last_name}`}
-                            />
-                          ) : (
-                            <div className="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-6 w-6 text-gray-500 dark:text-gray-400"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">
-                            {mechanic.first_name} {mechanic.last_name}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            @{mechanic.username}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-900 dark:text-white">
-                      {mechanic.email}
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-900 dark:text-white">
-                      {mechanic.phone_number || 'No especificado'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        color={mechanic.is_active ? 'success' : 'error'}
-                      >
-                        {mechanic.is_active ? 'Activo' : 'Inactivo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        color={mechanic.is_verified ? 'success' : 'warning'}
-                      >
-                        {mechanic.is_verified ? 'Verificado' : 'Pendiente'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-900 dark:text-white">
-                      {formatDate(mechanic.date_joined)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Link href={`/mechanics/${mechanic.id}`}>
-                          <Button variant="outline" size="sm">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                              />
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                              />
-                            </svg>
-                          </Button>
-                        </Link>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => setConfirmModal({
-                            isOpen: true,
-                            mechanicId: mechanic.id,
-                            mechanicName: `${mechanic.first_name} ${mechanic.last_name}`,
-                            action: 'delete'
-                          })}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                        </Button>
+              </TableHeader>
+
+              <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900"></div>
+                        <span className="ml-2">Cargando mecánicos...</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Paginación */}
-        {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-700 dark:text-gray-300">
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, totalCount)} de {totalCount} mecánicos
+                ) : mechanics.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
+                      No se encontraron mecánicos
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  mechanics.map((mechanic) => (
+                    <TableRow key={mechanic.id}>
+                      <TableCell className="px-5 py-4 sm:px-6 text-start">
+                        <span className="text-gray-500 text-theme-sm dark:text-gray-400">
+                          #{mechanic.id}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-5 py-4 sm:px-6 text-start">
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">
+                              {mechanic.first_name} {mechanic.last_name}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {mechanic.username}
+                            </span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                        {mechanic.email}
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                        {mechanic.phone_number || 'No especificado'}
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                        <Badge
+                          size="sm"
+                          color={mechanic.is_active ? "success" : "error"}
+                        >
+                          {mechanic.is_active ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                        <Badge
+                          size="sm"
+                          color={mechanic.is_verified ? "success" : "warning"}
+                        >
+                          {mechanic.is_verified ? "Verificado" : "Pendiente"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                        {formatDate(mechanic.date_joined)}
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/mechanics/${mechanic.id}`}
+                            className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
+                          >
+                            Ver
+                          </Link>
+                          <button
+                            onClick={() => setConfirmModal({
+                              isOpen: true,
+                              mechanicId: mechanic.id,
+                              mechanicName: `${mechanic.first_name} ${mechanic.last_name}`,
+                              action: 'delete'
+                            })}
+                            className="px-3 py-1 text-xs text-red-600 bg-red-100 rounded-md hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            
+            {/* Controles de paginación */}
+            {mechanics.length > 0 && (
+              <div className="mt-4 flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                  <p>
+                    Mostrando <span className="font-medium">{mechanics.length}</span> mecánicos, página <span className="font-medium">{currentPage}</span> de{" "}
+                    <span className="font-medium">{totalPages}</span>
+                  </p>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      const newPage = currentPage - 1;
+                      setCurrentPage(newPage);
+                      loadMechanics(newPage, searchTerm);
+                    }}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-1 rounded ${
+                      currentPage === 1 
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500" 
+                        : "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+                    }`}
+                  >
+                    Anterior
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      const newPage = currentPage + 1;
+                      setCurrentPage(newPage);
+                      loadMechanics(newPage, searchTerm);
+                    }}
+                    disabled={currentPage >= totalPages}
+                    className={`px-3 py-1 rounded ${
+                      currentPage >= totalPages 
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500" 
+                        : "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+                    }`}
+                  >
+                    Siguiente
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const newPage = currentPage - 1;
-                    setCurrentPage(newPage);
-                    loadMechanics(newPage, searchTerm);
-                  }}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </Button>
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Página {currentPage} de {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const newPage = currentPage + 1;
-                    setCurrentPage(newPage);
-                    loadMechanics(newPage, searchTerm);
-                  }}
-                  disabled={currentPage === totalPages}
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Modal de confirmación */}

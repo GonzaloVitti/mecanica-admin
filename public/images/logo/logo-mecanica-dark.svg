@@ -1,0 +1,22 @@
+<svg width="154" height="32" viewBox="0 0 154 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fondo del logo -->
+  <rect width="154" height="32" rx="6" fill="#374151"/>
+  
+  <!-- Llave inglesa -->
+  <path d="M8 12L12 8L14 10L16 8L18 10L16 12L14 14L12 12L8 12Z" fill="#FBBF24" stroke="#FBBF24" stroke-width="0.5"/>
+  
+  <!-- Destornillador -->
+  <path d="M20 10L24 6L25 7L21 11L20 10Z" fill="#F87171" stroke="#F87171" stroke-width="0.5"/>
+  <rect x="20" y="10" width="1" height="8" fill="#A78BFA"/>
+  
+  <!-- Engranaje -->
+  <circle cx="14" cy="20" r="4" fill="none" stroke="#34D399" stroke-width="1"/>
+  <circle cx="14" cy="20" r="2" fill="#34D399"/>
+  <path d="M14 16V14M14 26V24M18 20H20M8 20H10M16.83 17.17L18.24 15.76M9.76 24.24L11.17 22.83M16.83 22.83L18.24 24.24M9.76 15.76L11.17 17.17" stroke="#34D399" stroke-width="1"/>
+  
+  <!-- Texto "MECANICA" -->
+  <text x="32" y="20" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="white">MECANICA</text>
+  
+  <!-- Subtítulo -->
+  <text x="32" y="28" font-family="Arial, sans-serif" font-size="6" fill="#D1D5DB">TALLER PROFESIONAL</text>
+</svg>

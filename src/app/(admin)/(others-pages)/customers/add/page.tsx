@@ -114,7 +114,15 @@ const AddCustomerPage = () => {
       const uniqueDeviceId = formData.username + "-web-admin";
 
       const dataToSend = {
-        ...formData,
+        email: formData.email,
+        username: formData.username,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        phone_number: formData.phone_number,
+        password: formData.password,
+        role: 'CUSTOMER',
+        address: formData.address,
+        tax_id: formData.tax_id,
         device_id: uniqueDeviceId,
         device_type: 'WEB',
       };

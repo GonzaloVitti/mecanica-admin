@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ interface UserData {
   last_name: string;
   phone_number: string;
   is_verified: boolean;
-  role: 'CUSTOMER';
+  role: 'CUSTOMER' | 'MECHANIC' | 'SUPER_ADMIN';
   date_joined: string;
   is_active: boolean;
   profile_picture?: string;
@@ -45,12 +45,7 @@ interface Customer {
 }
 
 // Respuesta paginada de la API
-interface ApiResponse {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: Customer[];
-}
+type UsersApiResponse = UserData[];
 
 // Interfaz para las alertas
 interface AlertState {
@@ -168,10 +163,18 @@ const ConfirmModal = ({
 
 // Componente para mostrar el avatar del cliente
 const CustomerAvatar = ({ customer }: { customer: Customer }) => {
-  if (customer.user?.profile_picture) {
+  const src = React.useMemo(() => {
+    const url = customer.user?.profile_picture || ''
+    if (!url) return ''
+    if (url.startsWith('http://') || url.startsWith('https://')) return url
+    const base = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+    const path = url.startsWith('/') ? url : `/${url}`
+    return `${base}${path}`
+  }, [customer.user?.profile_picture])
+  if (src) {
     return (
       <img
-        src={customer.user.profile_picture}
+        src={src}
         alt={customer.name}
         className="w-10 h-10 rounded-full object-cover"
       />
@@ -204,74 +207,40 @@ const CustomersPage = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
   const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { user } = useStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
-  // Función para alternar el estado activo/inactivo del cliente
-  const handleToggleCustomerStatus = async (customer: Customer) => {
-    try {
-      const endpoint = customer.is_active ? 'deactivate' : 'reactivate';
-      await fetchApi(`/api/customers/${customer.id}/${endpoint}/`, {
-        method: 'POST'
-      });
-
-      // Actualizar el estado local
-      setCustomers(prevCustomers =>
-        prevCustomers.map(c =>
-          c.id === customer.id ? { ...c, is_active: !c.is_active } : c
-        )
-      );
-
-      setAlert({
-        show: true,
-        type: 'success',
-        title: 'Estado actualizado',
-        message: `El cliente ${customer.name} ha sido ${customer.is_active ? 'desactivado' : 'activado'} correctamente.`
-      });
-    } catch {
-      setAlert({
-        show: true,
-        type: 'error',
-        title: 'Error',
-        message: `No se pudo ${customer.is_active ? 'desactivar' : 'activar'} al cliente ${customer.name}.`
-      });
-    }
-  };
 
   // Función para cargar los clientes
-  const fetchCustomers = async (url = '/api/customers/') => {
+  const fetchCustomers = async () => {
     try {
       setLoading(true);
-      
-      // Extraer solo la parte relativa de la URL si es completa
-      if (url.startsWith('http')) {
-        url = url.replace(/^https?:\/\/[^\/]+/, '');
-      }
-      
-      const response = await fetchApi<ApiResponse>(url);
+      const response = await fetchApi<UsersApiResponse>('/api/users/customers/');
       
       if (response) {
-        setCustomers(response.results);
-        setTotalCount(response.count);
-        setNextPageUrl(response.next);
-        setPrevPageUrl(response.previous);
-        
-        // Calcular el número total de páginas
-        // Usar la misma lógica que funciona en products.tsx
-        const pageSize = response.results.length > 0 ? response.results.length : 10;
-        setTotalPages(Math.ceil(response.count / pageSize));
-        
-        // Actualizar la página actual basándose en la URL
-        if (url.includes('offset=')) {
-          const match = url.match(/offset=(\d+)/);
-          if (match) {
-            const offset = parseInt(match[1], 10);
-            setCurrentPage(Math.floor(offset / pageSize) + 1);
-          }
-        } else {
-          setCurrentPage(1);
-        }
+        const mapped = response.map((u) => ({
+          id: String(u.id),
+          user: u,
+          name: `${u.first_name} ${u.last_name}`.trim() || u.email,
+          tax_id: '',
+          email: u.email,
+          phone: u.phone_number,
+          address: '',
+          is_active: u.is_active,
+          has_user_account: true,
+          created_at: u.date_joined,
+          updated_at: u.date_joined,
+        }));
+
+        setCustomers(mapped);
+        setTotalCount(mapped.length);
+        setNextPageUrl(null);
+        setPrevPageUrl(null);
+        const pageSize = 10;
+        setTotalPages(Math.ceil(mapped.length / pageSize) || 1);
+        setCurrentPage(1);
       }
     } catch (error) {
       setError('Error al cargar los clientes');
@@ -283,30 +252,18 @@ const CustomersPage = () => {
 
   // Función para ir a la página anterior
   const goToPrevPage = () => {
-    if (prevPageUrl) {
-      const apiPath = prevPageUrl.replace(/^https?:\/\/[^\/]+/, '');
-      fetchCustomers(apiPath);
-      setCurrentPage(prev => Math.max(1, prev - 1));
-    }
+    setCurrentPage(prev => Math.max(1, prev - 1));
   };
 
   // Función para ir a la página siguiente
   const goToNextPage = () => {
-    if (nextPageUrl) {
-      const apiPath = nextPageUrl.replace(/^https?:\/\/[^\/]+/, '');
-      fetchCustomers(apiPath);
-      setCurrentPage(prev => prev + 1);
-    }
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
   };
 
   // Función para ir a una página específica
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
-      // El backend usa limit/offset, no page
-      const limit = 10; // Debe coincidir con el limit del backend
-      const offset = (page - 1) * limit;
-      const url = `/api/customers/?limit=${limit}&offset=${offset}`;
-      fetchCustomers(url);
+      setCurrentPage(page);
     }
   };
 
@@ -326,6 +283,27 @@ const CustomersPage = () => {
     fetchCustomers();
   }, []);
 
+  // Actualizar totalPages cuando cambian el término de búsqueda o los clientes
+  useEffect(() => {
+    const pageSize = 10;
+    const filteredLen = customers.filter(c => {
+      const term = searchTerm.trim().toLowerCase();
+      if (!term) return true;
+      const name = (c.name || '').toLowerCase();
+      const email = (c.email || c.user?.email || '').toLowerCase();
+      const phone = (c.phone || c.user?.phone_number || '').toLowerCase();
+      const tax = (c.tax_id || '').toLowerCase();
+      return (
+        name.includes(term) ||
+        email.includes(term) ||
+        phone.includes(term) ||
+        tax.includes(term)
+      );
+    }).length;
+    setTotalPages(Math.max(1, Math.ceil(filteredLen / pageSize)));
+    setCurrentPage(1);
+  }, [searchTerm, customers]);
+
   // Función para ocultar la alerta después de cierto tiempo
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -343,20 +321,40 @@ const CustomersPage = () => {
     setModalOpen(true);
   };
 
+  // Búsqueda local
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentPage(1);
+  };
+
+  const pageSize = 10;
+  const filteredCustomers = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return customers;
+    return customers.filter(c => {
+      const name = (c.name || '').toLowerCase();
+      const email = (c.email || c.user?.email || '').toLowerCase();
+      const phone = (c.phone || c.user?.phone_number || '').toLowerCase();
+      const tax = (c.tax_id || '').toLowerCase();
+      return (
+        name.includes(term) ||
+        email.includes(term) ||
+        phone.includes(term) ||
+        tax.includes(term)
+      );
+    });
+  }, [customers, searchTerm]);
+
   // Función para eliminar cliente
   const handleDelete = async () => {
     if (!customerToDelete) return;
     
     try {
-      // Si el cliente tiene una cuenta de usuario, usar delete_account
-      if (customerToDelete.has_user_account && customerToDelete.user?.id) {
-        // NOTA: Usar delete_account para eliminar completamente el usuario
-        // Esto elimina tanto la cuenta de usuario como todos sus perfiles (incluyendo el de cliente)
+      if (customerToDelete.user?.id) {
         await fetchApi(`/api/users/${customerToDelete.user.id}/delete_account/`, {
           method: 'DELETE'
         });
 
-        // Recargar la lista completa para asegurar sincronización
         fetchCustomers();
         
         setAlert({
@@ -366,18 +364,11 @@ const CustomersPage = () => {
           message: `El cliente ${customerToDelete.name} y su cuenta de usuario han sido eliminados correctamente.`
         });
       } else {
-        // Si no tiene cuenta de usuario, eliminar solo el cliente
-        await fetchApi(`/api/customers/${customerToDelete.id}/`, {
-          method: 'DELETE'
-        });
-        
-        fetchCustomers();
-        
         setAlert({
           show: true,
-          type: 'success',
-          title: 'Cliente eliminado',
-          message: `El cliente ${customerToDelete.name} ha sido eliminado correctamente.`
+          type: 'error',
+          title: 'Operación no disponible',
+          message: `No se puede eliminar clientes sin cuenta mientras el backend de clientes no esté disponible.`
         });
       }
     } catch (error) {
@@ -455,6 +446,23 @@ const CustomersPage = () => {
         )}
       </div>
 
+      <div className="mb-6">
+        <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Buscar por nombre, email, teléfono o CUIT/DNI..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
+          </div>
+          <button type="submit" className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-md bg-white hover:bg-gray-50 dark:text-gray-300 dark:bg-transparent dark:border-gray-700 dark:hover:bg-gray-800">
+            Buscar
+          </button>
+        </form>
+      </div>
+
       {/* Indicador de carga cuando ya hay datos */}
       {loading && customers.length > 0 && (
         <div className="mb-4 flex justify-center">
@@ -497,7 +505,7 @@ const CustomersPage = () => {
               </TableHeader>
 
               <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
-                {customers.map((customer) => (
+                {filteredCustomers.slice((currentPage - 1) * pageSize, (currentPage - 1) * pageSize + pageSize).map((customer) => (
                   <TableRow key={customer.id}>
                     <TableCell className="px-5 py-4 sm:px-6 text-start">
                       <span className="text-gray-500 text-theme-sm dark:text-gray-400">
@@ -543,21 +551,12 @@ const CustomersPage = () => {
                     <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/customers/${customer.id}`}
+                          href={`/customers/${customer.user?.id ?? customer.id}`}
                           className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
                         >
                           Ver
                         </Link>
-                        <button
-                          onClick={() => handleToggleCustomerStatus(customer)}
-                          className={`px-3 py-1 text-xs rounded-md ${
-                            customer.is_active
-                              ? 'text-orange-600 bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
-                              : 'text-green-600 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
-                          }`}
-                        >
-                          {customer.is_active ? 'Desactivar' : 'Activar'}
-                        </button>
+                        
                         <button
                           onClick={() => confirmDelete(customer)}
                           className="px-3 py-1 text-xs text-red-600 bg-red-100 rounded-md hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400"
@@ -569,7 +568,7 @@ const CustomersPage = () => {
                   </TableRow>
                 ))}
 
-                {customers.length === 0 && !loading && (
+                {filteredCustomers.length === 0 && !loading && (
                   <TableRow>
                     <TableCell colSpan={9} className="px-5 py-8 text-center text-gray-500 dark:text-gray-400">
                       No se encontraron clientes
@@ -580,21 +579,20 @@ const CustomersPage = () => {
             </Table>
             
             {/* Controles de paginación */}
-            {customers.length > 0 && (
+            {filteredCustomers.length > 0 && (
               <div className="mt-4 flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
                   <p>
-                    Mostrando <span className="font-medium">{customers.length}</span> clientes, página <span className="font-medium">{currentPage}</span> de{" "}
-                    <span className="font-medium">{totalPages}</span>
+                    Mostrando <span className="font-medium">{Math.min(pageSize, Math.max(0, filteredCustomers.length - (currentPage - 1) * pageSize))}</span> clientes, página <span className="font-medium">{currentPage}</span> de <span className="font-medium">{totalPages}</span>
                   </p>
                 </div>
                 
                 <div className="flex space-x-2">
                   <button
                     onClick={goToPrevPage}
-                    disabled={!prevPageUrl}
+                    disabled={currentPage <= 1}
                     className={`px-3 py-1 rounded ${
-                      !prevPageUrl 
+                      currentPage <= 1 
                         ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500" 
                         : "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
                     }`}
@@ -604,9 +602,9 @@ const CustomersPage = () => {
                   
                   <button
                     onClick={goToNextPage}
-                    disabled={!nextPageUrl || currentPage >= totalPages}
+                    disabled={currentPage >= totalPages}
                     className={`px-3 py-1 rounded ${
-                      !nextPageUrl || currentPage >= totalPages
+                      currentPage >= totalPages
                         ? "bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500" 
                         : "bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
                     }`}

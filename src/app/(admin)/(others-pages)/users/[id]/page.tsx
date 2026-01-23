@@ -18,26 +18,16 @@ interface User {
   last_name: string;
   phone_number: string;
   is_verified: boolean;
-  role: 'ADMIN' | 'DRIVER' | 'PASSENGER' | 'AUTHORIZER' | 'ADMINISTRATOR' | 'SUPER_ADMIN' | 'CASHIER' | 'SALESMAN' | 'BRANCH_MANAGER' | 'FINANCE';
+  role: 'MECHANIC' | 'SUPER_ADMIN';
   date_joined: string;
 }
 
 const getRoleBadgeColor = (role: User['role']) => {
   switch (role) {
-    case 'ADMIN':
-    case 'ADMINISTRATOR':
     case 'SUPER_ADMIN':
-      return 'success';
-    case 'DRIVER':
-    case 'SALESMAN':
       return 'primary';
-    case 'PASSENGER':
-    case 'CASHIER':
-      return 'warning';
-    case 'AUTHORIZER':
-    case 'BRANCH_MANAGER':
-    case 'FINANCE':
-      return 'info';
+    case 'MECHANIC':
+      return 'success';
     default:
       return 'default';
   }
@@ -45,18 +35,10 @@ const getRoleBadgeColor = (role: User['role']) => {
 
 const translateRole = (role: User['role']): string => {
   switch (role) {
-    case 'ADMINISTRATOR':
-      return 'Administrador';
     case 'SUPER_ADMIN':
       return 'Super Administrador';
-    case 'CASHIER':
-      return 'Cajero';
-    case 'SALESMAN':
-      return 'Vendedor';
-    case 'BRANCH_MANAGER':
-      return 'Gerente de Sucursal';
-    case 'FINANCE':
-      return 'Finanzas';
+    case 'MECHANIC':
+      return 'Mecánico';
     default:
       return role;
   }
@@ -155,7 +137,7 @@ const UserDetail = () => {
       };
   
       // Actualizar datos básicos con PATCH
-      const response = await fetchApi<User>(`/api/users/${userId}/`, {
+      const response = await fetchApi<User>(`/api/users/${userId}/update_profile/`, {
         method: 'PATCH',
         body: userUpdateData
       });
@@ -164,10 +146,9 @@ const UserDetail = () => {
   
       // Si el estado de verificación ha cambiado
       if (user && formData.is_verified !== user.is_verified) {
-        // Llamar al endpoint toggle_active_status
-        await fetchApi(`/api/users/${userId}/toggle_active_status/`, {
+        await fetchApi(`/api/users/${userId}/toggle_verified_status/`, {
           method: 'POST',
-          body: {} // No necesita body
+          body: {}
         });
       }
   

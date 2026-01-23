@@ -461,7 +461,7 @@ const AFIPInvoicesPage = () => {
             <p className="text-gray-600 dark:text-gray-400 mb-4">
               No se encontraron facturas AFIP con los filtros aplicados.
             </p>
-            <Link href="/admin/arca/add">
+            <Link href="/arca/add">
               <Button variant="primary">
                 Crear primera factura
               </Button>
@@ -555,7 +555,7 @@ const AFIPInvoicesPage = () => {
                     </TableCell>
                     <TableCell className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
-                        <Link href={`/admin/arca/${invoice.id}`}>
+                        <Link href={`/arca/${invoice.id}`}>
                           <Button size="sm" variant="outline">
                             Ver
                           </Button>

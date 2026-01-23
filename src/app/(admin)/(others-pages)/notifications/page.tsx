@@ -222,23 +222,7 @@ const Page = () => {
             Visualice y gestione todas las notificaciones de la plataforma
           </p>
         </div>
-        
-        <div className="flex gap-3">
-          {/* Botón para añadir notificación */}
-          <Link
-            href="/notifications/add"
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-          >
-            Nueva Notificación
-          </Link>
-          
-          <button
-            onClick={markAllAsRead}
-            className="px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-lg hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
-          >
-            Marcar todas como leídas
-          </button>
-        </div>
+      
       </div>
 
       {showAlert && (

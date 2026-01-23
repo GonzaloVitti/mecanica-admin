@@ -1,11 +1,12 @@
 'use client'
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { fetchApi } from '@/app/lib/data';
 import Badge from '@/components/ui/badge/Badge';
 import Input from '@/components/form/input/InputField';
 import Label from '@/components/form/Label';
+import FileInput from '@/components/form/input/FileInput';
 import { Modal } from "@/components/ui/modal";
 import { useModal } from "@/hooks/useModal";
 import WhatsAppLink from '@/components/whatsapp/WhatsAppLink';
@@ -50,7 +51,6 @@ interface CustomerFormData {
   phone: string;
   address: string;
   is_active: boolean;
-  is_verified: boolean;
 }
 
 const formatDate = (dateString: string) => {
@@ -77,28 +77,51 @@ const CustomerDetail = () => {
     email: '',
     phone: '',
     address: '',
-    is_active: false,
-    is_verified: false
+    is_active: false
   });
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [profileFile, setProfileFile] = useState<File | null>(null);
+
+  const profileUrl = useMemo(() => {
+    const url = customer?.user?.profile_picture || '';
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const base = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+    const path = url.startsWith('/') ? url : `/${url}`;
+    return `${base}${path}`;
+  }, [customer?.user?.profile_picture]);
 
   // Cargar datos del cliente
   useEffect(() => {
-    const fetchCustomer = async () => {
+    const fetchUserAsCustomer = async () => {
       try {
         setLoading(true);
-        const response = await fetchApi<Customer>(`/api/customers/${customerId}/`);
-        if (response) {
-          setCustomer(response);
+        const u = await fetchApi<UserData>(`/api/users/${customerId}/`);
+        if (u) {
+          const composed: Customer = {
+            id: String(u.id),
+            user: u,
+            name: `${u.first_name} ${u.last_name}`.trim() || u.email,
+            tax_id: '',
+            tax_condition: 'CF',
+            email: u.email,
+            phone: u.phone_number,
+            address: '',
+            is_active: u.is_active,
+            has_user_account: true,
+            created_at: u.date_joined,
+            updated_at: u.date_joined,
+          };
+
+          setCustomer(composed);
           setFormData({
-            name: response.name,
-            tax_id: response.tax_id,
-            tax_condition: response.tax_condition || 'CF',
-            email: response.email,
-            phone: response.phone,
-            address: response.address,
-            is_active: response.is_active,
-            is_verified: response.user?.is_verified || false
+            name: composed.name,
+            tax_id: composed.tax_id,
+            tax_condition: composed.tax_condition,
+            email: composed.email,
+            phone: composed.phone,
+            address: composed.address,
+            is_active: composed.is_active,
           });
         } else {
           setError('Cliente no encontrado');
@@ -112,7 +135,7 @@ const CustomerDetail = () => {
     };
 
     if (customerId) {
-      fetchCustomer();
+      fetchUserAsCustomer();
     }
   }, [customerId]);
 
@@ -141,89 +164,58 @@ const CustomerDetail = () => {
     }
   };
 
-  const handleToggleCustomerStatus = async (customer: Customer) => {
-    try {
-      const endpoint = customer.is_active ? 'deactivate' : 'reactivate';
-      await fetchApi(`/api/customers/${customer.id}/${endpoint}/`, {
-        method: 'POST'
-      });
+  
 
-      // Actualizar el estado local
-      setCustomer(prev => prev ? { ...prev, is_active: !prev.is_active } : null);
-      setFormData(prev => ({ ...prev, is_active: !prev.is_active }));
-    } catch (error) {
-      console.error('Error toggling customer status:', error);
-    }
-  };
-
-  const handleToggleUserVerification = async (userId: number) => {
-    try {
-      const response = await fetchApi(`/api/users/${userId}/toggle_verified_status/`, {
-        method: 'POST'
-      });
-
-      if (response) {
-        // Actualizar el estado local del cliente
-        setCustomer(prev => prev ? {
-          ...prev,
-          user: prev.user ? {
-            ...prev.user,
-            is_verified: !prev.user.is_verified
-          } : null
-        } : null);
-
-        // Actualizar también el formData
-        setFormData(prev => ({
-          ...prev,
-          is_verified: !prev.is_verified
-        }));
-      }
-    } catch (error) {
-      console.error('Error al actualizar verificación del usuario:', error);
-    }
-  };
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setUpdateLoading(true);
 
     try {
-      // 1. Actualizar datos del cliente (excluyendo is_verified)
-      const customerUpdateData = {
-        name: formData.name,
-        tax_id: formData.tax_id,
-        tax_condition: formData.tax_condition,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        is_active: formData.is_active
-      };
-
-      const updatedCustomer = await fetchApi<Customer>(`/api/customers/${customerId}/`, {
-        method: 'PATCH',
-        body: customerUpdateData
-      });
-
-      if (updatedCustomer) {
-        // 2. Si el estado de verificación ha cambiado y el cliente tiene cuenta de usuario, llamar al endpoint de verificación
-        if (customer && customer.user && formData.is_verified !== customer.user.is_verified) {
-          await fetchApi(`/api/users/${customer.user.id}/toggle_verified_status/`, {
-            method: 'POST',
-            body: {}
-          });
+      if (customer?.user?.id) {
+        if (profileFile) {
+          const fd = new FormData();
+          fd.append('profile_picture', profileFile);
+          await fetchApi<UserData>(`/api/users/${customer.user.id}/update_profile_picture/`, { method: 'POST', body: fd as any, isFormData: true });
         }
+        const userUpdateData = {
+          first_name: formData.name.split(' ')[0] || customer.user.first_name,
+          last_name: formData.name.split(' ').slice(1).join(' ') || customer.user.last_name,
+          phone_number: formData.phone,
+        };
 
-        // 3. Recargar los datos del cliente para obtener el estado actualizado
-        const finalCustomer = await fetchApi<Customer>(`/api/customers/${customerId}/`);
-        if (finalCustomer) {
-          setCustomer(finalCustomer);
-          // Actualizar también el formData con los datos reales
+        await fetchApi(`/api/users/${customer.user.id}/update_profile/`, {
+          method: 'PATCH',
+          body: userUpdateData,
+        });
+
+        
+
+        const refreshed = await fetchApi<UserData>(`/api/users/${customer.user.id}/`);
+        if (refreshed) {
+          setCustomer({
+            id: String(refreshed.id),
+            user: refreshed,
+            name: `${refreshed.first_name} ${refreshed.last_name}`.trim() || refreshed.email,
+            tax_id: '',
+            tax_condition: 'CF',
+            email: refreshed.email,
+            phone: refreshed.phone_number,
+            address: '',
+            is_active: refreshed.is_active,
+            has_user_account: true,
+            created_at: refreshed.date_joined,
+            updated_at: refreshed.date_joined,
+          });
           setFormData(prev => ({
             ...prev,
-            is_verified: finalCustomer.user?.is_verified || false
+            name: `${refreshed.first_name} ${refreshed.last_name}`.trim() || refreshed.email,
+            phone: refreshed.phone_number || '',
           }));
+          setProfileFile(null);
         }
-        
+
         closeModal();
       }
     } catch (err) {
@@ -279,21 +271,7 @@ const CustomerDetail = () => {
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
               Detalle de Cliente
             </h3>
-            <div className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
-              <div className="flex items-center gap-2">
-                <span>Activar o desactivar cliente</span>
-
-                <span
-                  onClick={() => handleToggleCustomerStatus(customer)}
-                  className={`cursor-pointer px-3 py-2 rounded-md ${customer.is_active
-                    ? 'text-red-600 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400'
-                    : 'text-green-600 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
-                    }`}
-                >
-                  {customer.is_active ? "Desactivar" : "Activar"}
-                </span>
-              </div>
-            </div>
+            
             <div className="space-x-3">
               <button
                 onClick={handleOpenModal}
@@ -314,9 +292,9 @@ const CustomerDetail = () => {
               <div className="flex flex-col items-center w-full gap-6 xl:flex-row">
                 {/* Foto de perfil */}
                 <div className="relative w-24 h-24 xl:w-28 xl:h-28">
-                  {customer.user?.profile_picture ? (
+                  {profileUrl ? (
                     <img
-                      src={customer.user.profile_picture}
+                      src={profileUrl}
                       alt={customer.name}
                       className="w-full h-full object-cover rounded-full"
                     />
@@ -418,31 +396,7 @@ const CustomerDetail = () => {
                   </p>
                 </div>
 
-                {customer.has_user_account && customer.user && (
-                  <div>
-                    <p className="mb-2 text-xs leading-normal text-gray-500 dark:text-gray-400">
-                      Verificación de Email
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        size="sm"
-                        color={customer.user.is_verified ? "success" : "warning"}
-                      >
-                        {customer.user.is_verified ? "Verificado" : "No Verificado"}
-                      </Badge>
-                      <button
-                        onClick={() => handleToggleUserVerification(customer.user!.id)}
-                        className={`text-xs px-2 py-1 rounded-md ${
-                          customer.user.is_verified
-                            ? 'text-orange-600 bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400'
-                            : 'text-green-600 bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'
-                        }`}
-                      >
-                        {customer.user.is_verified ? 'Desverificar' : 'Verificar'}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                
 
                 <div>
                   <p className="mb-2 text-xs leading-normal text-gray-500 dark:text-gray-400">
@@ -465,64 +419,7 @@ const CustomerDetail = () => {
             </div>
           </div>
 
-          {/* Información de la Cuenta de Usuario */}
-          {customer.user && (
-            <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800 lg:p-6 mb-6">
-              <div>
-                <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-4">
-                  Información de la Cuenta de Usuario
-                </h4>
-
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-7 2xl:gap-x-32">
-                  <div>
-                    <p className="mb-2 text-xs leading-normal text-gray-500 dark:text-gray-400">
-                      Nombre Completo
-                    </p>
-                    <p className="text-sm font-medium text-gray-800 dark:text-white/90">
-                      {customer.user.first_name} {customer.user.last_name}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 text-xs leading-normal text-gray-500 dark:text-gray-400">
-                      Username
-                    </p>
-                    <p className="text-sm font-medium text-gray-800 dark:text-white/90">
-                      {customer.user.username || 'No especificado'}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 text-xs leading-normal text-gray-500 dark:text-gray-400">
-                      Estado de Verificación
-                    </p>
-                    <div className="flex gap-2">
-                      <Badge
-                        size="sm"
-                        color={customer.user.is_verified ? "success" : "warning"}
-                      >
-                        {customer.user.is_verified ? "Verificado" : "No verificado"}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 text-xs leading-normal text-gray-500 dark:text-gray-400">
-                      Estado de la Cuenta
-                    </p>
-                    <div className="flex gap-2">
-                      <Badge
-                        size="sm"
-                        color={customer.user.is_active ? "success" : "error"}
-                      >
-                        {customer.user.is_active ? "Activa" : "Inactiva"}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          
         </div>
       </div>
 
@@ -618,6 +515,22 @@ const CustomerDetail = () => {
                 </div>
 
                 {/* Dirección */}
+                {/* Foto de perfil */}
+                <div>
+                  <Label>Foto de perfil</Label>
+                  <FileInput accept="image/*" onChange={(e) => setProfileFile(e.target.files?.[0] || null)} />
+                  {(profileFile || profileUrl) && (
+                    <div className="mt-3">
+                      <img
+                        src={profileFile ? URL.createObjectURL(profileFile) : profileUrl || ''}
+                        alt="Foto de perfil"
+                        className="h-20 w-20 rounded-full object-cover border border-gray-200 dark:border-gray-700"
+                      />
+                    </div>
+                  )}
+                </div>
+                
+                {/* Dirección */}
                 <div>
                   <Label htmlFor="address">Dirección</Label>
                   <textarea
@@ -631,53 +544,9 @@ const CustomerDetail = () => {
                   />
                 </div>
 
-                {/* Estado */}
-                <div>
-                  <Label htmlFor="is_active" className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="is_active"
-                      id="is_active"
-                      checked={formData.is_active}
-                      onChange={handleInputChange}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Cliente activo
-                  </Label>
-                </div>
+                
 
-                {/* Verificación de Usuario - Solo mostrar si tiene cuenta de usuario */}
-                {customer.has_user_account && customer.user && (
-                  <div>
-                    <Label htmlFor="is_verified" className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        name="is_verified"
-                        id="is_verified"
-                        checked={formData.is_verified}
-                        onChange={handleInputChange}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      Usuario Verificado
-                    </Label>
-                    <div className="ml-6 mt-2 flex items-center gap-2">
-                      <Badge
-                        size="sm"
-                        color={formData.is_verified ? "success" : "warning"}
-                      >
-                        {formData.is_verified ? "Verificado" : "No Verificado"}
-                      </Badge>
-                      {formData.is_verified !== customer.user.is_verified && (
-                        <Badge
-                          size="sm"
-                          color="info"
-                        >
-                          Cambiará a: {formData.is_verified ? "Verificado" : "No Verificado"}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
+                
               </form>
             </div>
 

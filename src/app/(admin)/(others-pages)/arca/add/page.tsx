@@ -54,6 +54,24 @@ interface Sale {
   status: string;
 }
 
+interface WorkOrderItem {
+  id?: string;
+  item_type: 'LABOR' | 'PART';
+  product?: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+}
+
+interface WorkOrder {
+  id: string;
+  work_order_number: string;
+  customer_name: string;
+  customer_phone?: string;
+  items: WorkOrderItem[];
+}
+
 interface Product {
   id: string;
   name: string;
@@ -118,13 +136,14 @@ const AddAFIPInvoicePage = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [afipConfigs, setAfipConfigs] = useState<AFIPConfiguration[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingConfigs, setLoadingConfigs] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
-  const [loadingSales, setLoadingSales] = useState(false);
+  const [loadingServices, setLoadingServices] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState<string>('');
 
   const [formData, setFormData] = useState<AFIPInvoiceFormData>({
     branch: '',
@@ -224,17 +243,17 @@ const AddAFIPInvoicePage = () => {
     }
   }, [formData.branch]);
 
-  // Cargar órdenes de compra y ventas cuando se selecciona una sucursal
+  // Cargar órdenes de compra y servicios cuando se selecciona una sucursal
   useEffect(() => {
     if (formData.branch) {
-      const fetchOrdersAndSales = async () => {
+      const fetchOrdersAndServices = async () => {
         try {
           setLoadingOrders(true);
-          setLoadingSales(true);
+          setLoadingServices(true);
           
           const [ordersResponse, salesResponse] = await Promise.all([
             fetchApi<{ results: PurchaseOrder[] }>(`/api/purchase-orders/?branch=${formData.branch}&status=COMPLETED`),
-            fetchApi<{ results: Sale[] }>(`/api/sales/?branch=${formData.branch}&status=COMPLETED`)
+            fetchApi<{ results: any[] }>(`/api/work-orders/?status=COMPLETED&limit=200`)
           ]);
 
           if (ordersResponse) {
@@ -242,22 +261,49 @@ const AddAFIPInvoicePage = () => {
           }
           
           if (salesResponse) {
-            setSales(salesResponse.results);
+            const list = (salesResponse.results || []).map((wo: any) => ({
+              id: wo.id,
+              work_order_number: wo.work_order_number,
+              customer_name: wo.customer_name,
+              items: []
+            })) as WorkOrder[];
+            setWorkOrders(list);
           }
         } catch (error) {
-          console.error('Error fetching orders and sales:', error);
+          console.error('Error fetching orders and services:', error);
         } finally {
           setLoadingOrders(false);
-          setLoadingSales(false);
+          setLoadingServices(false);
         }
       };
 
-      fetchOrdersAndSales();
+      fetchOrdersAndServices();
     } else {
       setPurchaseOrders([]);
-      setSales([]);
+      setWorkOrders([]);
+      setSelectedWorkOrder('');
     }
   }, [formData.branch]);
+
+  const prefillFromWorkOrder = async (id: string) => {
+    if (!id) return;
+    try {
+      const data = await fetchApi<any>(`/api/work-orders/${id}/`, { method: 'GET' });
+      if (!data) return;
+      setFormData(prev => ({
+        ...prev,
+        razon_social: data.customer_name || prev.razon_social,
+      }));
+      const mapped = (data.items || []).map((it: any) => ({
+        product: it.item_type === 'PART' ? (it.product || '') : '',
+        descripcion: it.description || '',
+        cantidad: String(Number(it.quantity || '0') || 1),
+        precio_unitario: String(Number(it.unit_price || '0') || 0),
+        alicuota_iva: String(Number(it.tax_rate || '0') || 0),
+      })) as AFIPInvoiceItemFormData[];
+      if (mapped.length > 0) setItems(mapped);
+    } catch {}
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -339,9 +385,8 @@ const AddAFIPInvoicePage = () => {
     if (!formData.razon_social.trim()) newErrors.razon_social = 'La razón social es requerida';
     
     // Validar que se especifique al menos una orden de compra o venta
-    if (!formData.purchase_order && !formData.sale) {
-      newErrors.purchase_order = 'Debe especificar al menos una orden de compra o una venta';
-      newErrors.sale = 'Debe especificar al menos una orden de compra o una venta';
+    if (!formData.purchase_order && !selectedWorkOrder) {
+      newErrors.purchase_order = 'Debe especificar al menos una orden de compra o un servicio';
     }
 
     // Validaciones de items
@@ -664,37 +709,34 @@ const AddAFIPInvoicePage = () => {
                 )}
               </div>
 
-              {/* Venta */}
+              {/* Servicio */}
               <div>
-                <Label htmlFor="sale" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Venta
+                <Label htmlFor="work_order" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Servicio
                 </Label>
                 <select
-                  id="sale"
-                  name="sale"
-                  value={formData.sale}
-                  onChange={handleInputChange}
-                  disabled={loadingSales || !formData.branch}
+                  id="work_order"
+                  name="work_order"
+                  value={selectedWorkOrder}
+                  onChange={(e) => { setSelectedWorkOrder(e.target.value); prefillFromWorkOrder(e.target.value); }}
+                  disabled={loadingServices || !formData.branch}
                   className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                    errors.sale ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    errors.purchase_order ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                   }`}
                 >
-                  <option value="">Seleccionar venta...</option>
-                  {sales.map(sale => (
-                    <option key={sale.id} value={sale.id}>
-                      {sale.sale_number} - {sale.customer?.name || sale.customer_name} - ${sale.total}
+                  <option value="">Seleccionar servicio...</option>
+                  {workOrders.map(wo => (
+                    <option key={wo.id} value={wo.id}>
+                      {wo.work_order_number} - {wo.customer_name}
                     </option>
                   ))}
                 </select>
-                {errors.sale && (
-                  <span className="text-xs text-red-500">{errors.sale}</span>
-                )}
               </div>
             </div>
 
             <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
               <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>Nota:</strong> Debe seleccionar al menos una orden de compra o una venta como origen de la factura.
+                <strong>Nota:</strong> Puede seleccionar una orden de compra o un servicio como origen. Al elegir un servicio, se precargan los ítems del presupuesto.
               </p>
             </div>
           </div>

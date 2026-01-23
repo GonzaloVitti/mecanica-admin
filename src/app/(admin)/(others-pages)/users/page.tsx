@@ -21,8 +21,10 @@ interface User {
   last_name: string;
   phone_number: string;
   is_verified: boolean;
-  role: 'ADMINISTRATOR' | 'SUPER_ADMIN' | 'CASHIER' | 'SALESMAN' | 'BRANCH_MANAGER' | 'FINANCE' | 'INVENTORY_MANAGER' | 'CUSTOMER';
+  is_active: boolean;
+  role: 'MECHANIC' | 'SUPER_ADMIN';
   date_joined: string;
+  profile_picture?: string;
 }
 
 interface ApiResponse {
@@ -42,22 +44,10 @@ interface AlertState {
 
 const getRoleBadgeColor = (role: User['role']) => {
   switch (role) {
-    case 'ADMINISTRATOR':
-      return 'success';
     case 'SUPER_ADMIN':
       return 'primary';
-    case 'CASHIER':
-      return 'info';
-    case 'SALESMAN':
-      return 'warning';
-    case 'BRANCH_MANAGER':
-      return 'primary';
-    case 'FINANCE':
-      return 'info';
-    case 'INVENTORY_MANAGER':
-      return 'primary';
-    case 'CUSTOMER':
-      return 'light';
+    case 'MECHANIC':
+      return 'success';
     default:
       return 'default';
   }
@@ -65,22 +55,10 @@ const getRoleBadgeColor = (role: User['role']) => {
 
 const translateRole = (role: User['role']) => {
   switch (role) {
-    case 'ADMINISTRATOR':
-      return 'Administrador';
     case 'SUPER_ADMIN':
       return 'Super Administrador';
-    case 'CASHIER':
-      return 'Cajero';
-    case 'SALESMAN':
-      return 'Vendedor';
-    case 'BRANCH_MANAGER':
-      return 'Gerente de Sucursal';
-    case 'FINANCE':
-      return 'Finanzas';
-    case 'INVENTORY_MANAGER':
-      return 'Gerente de Inventario';
-    case 'CUSTOMER':
-      return 'Cliente';
+    case 'MECHANIC':
+      return 'Mecánico';
     default:
       return role;
   }
@@ -392,22 +370,16 @@ const Page = () => {
         </h1>
       </div>
 
-      {/* CORREGIDO: Actualizar el manejador del select para usar la API */}
+      {/* Filtro por rol */}
       <div className="mb-6">
         <select
           value={roleFilter}
           onChange={handleRoleFilterChange} 
           className="px-4 py-2 border border-gray-300 rounded-md bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
         >
-          <option value="ALL">Todos los roles</option>
-          <option value="ADMINISTRATOR">Administradores</option>
+          <option value="ALL">Todos</option>
+          <option value="MECHANIC">Mecánicos</option>
           <option value="SUPER_ADMIN">Super Administradores</option>
-          <option value="CASHIER">Cajeros</option>
-          <option value="SALESMAN">Vendedores</option>
-          <option value="BRANCH_MANAGER">Gerentes de Sucursal</option>
-          <option value="FINANCE">Finanzas</option>
-          <option value="INVENTORY_MANAGER">Gerentes de Inventario</option>
-          <option value="CUSTOMER">Clientes</option>
         </select>
       </div>
 
@@ -440,7 +412,10 @@ const Page = () => {
                     Rol
                   </TableCell>
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                    Estado
+                    Activo
+                  </TableCell>
+                  <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
+                    Verificado
                   </TableCell>
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                     Fecha de registro
@@ -484,6 +459,14 @@ const Page = () => {
                         color={getRoleBadgeColor(user.role)}
                       >
                         {translateRole(user.role)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
+                      <Badge
+                        size="sm"
+                        color={user.is_active ? "success" : "error"}
+                      >
+                        {user.is_active ? "Activo" : "Inactivo"}
                       </Badge>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">

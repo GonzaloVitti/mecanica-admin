@@ -135,14 +135,14 @@ export default function MonthlySalesChart() {
         show: false,
       },
       y: {
-        formatter: (val: number) => `${val} ventas`,
+        formatter: (val: number) => `${val} servicios`,
       },
     },
   };
 
   const series = [
     {
-      name: "Ventas",
+      name: "Servicios",
       data: loading ? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] : salesCounts,
     },
   ];
@@ -151,7 +151,7 @@ export default function MonthlySalesChart() {
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white px-5 pt-5 dark:border-gray-800 dark:bg-white/[0.03] sm:px-6 sm:pt-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-          Ventas Mensuales
+          Servicios Mensuales
         </h3>
       </div>
 

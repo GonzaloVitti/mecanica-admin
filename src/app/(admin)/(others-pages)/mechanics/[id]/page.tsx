@@ -76,12 +76,8 @@ const MechanicDetailPage = () => {
   const loadMechanic = async () => {
     try {
       setLoading(true);
-      const data = await fetchApi<Mechanic>(`/users/${mechanicId}/`, {
+      const data = await fetchApi<Mechanic>(`/api/users/${mechanicId}/`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-          'Content-Type': 'application/json',
-        },
       });
 
       if (data) {
@@ -170,11 +166,8 @@ const MechanicDetailPage = () => {
       profileData.append('last_name', editFormData.last_name);
       profileData.append('phone_number', editFormData.phone_number);
 
-      const profileResponse = await fetchApi(`/users/${mechanicId}/update_profile/`, {
+      const profileResponse = await fetchApi(`/api/users/${mechanicId}/update_profile/`, {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-        },
         body: profileData,
         isFormData: true,
       });
@@ -188,11 +181,8 @@ const MechanicDetailPage = () => {
         const pictureData = new FormData();
         pictureData.append('profile_picture', editFormData.profile_picture);
 
-        const pictureResponse = await fetchApi(`/users/${mechanicId}/update_profile_picture/`, {
+        const pictureResponse = await fetchApi(`/api/users/${mechanicId}/update_profile_picture/`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${user?.access_token}`,
-          },
           body: pictureData,
           isFormData: true,
         });
@@ -216,12 +206,8 @@ const MechanicDetailPage = () => {
   // Cambiar estado activo
   const toggleActiveStatus = async () => {
     try {
-      const data = await fetchApi(`/users/${mechanicId}/toggle_active_status/`, {
+      const data = await fetchApi(`/api/users/${mechanicId}/toggle_active_status/`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-          'Content-Type': 'application/json',
-        },
       });
 
       if (data) {
@@ -239,12 +225,8 @@ const MechanicDetailPage = () => {
   // Cambiar estado verificado
   const toggleVerifiedStatus = async () => {
     try {
-      const data = await fetchApi(`/users/${mechanicId}/toggle_verified_status/`, {
+      const data = await fetchApi(`/api/users/${mechanicId}/toggle_verified_status/`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-          'Content-Type': 'application/json',
-        },
       });
 
       if (data) {

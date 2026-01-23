@@ -129,7 +129,7 @@ export default function MonthlyTarget() {
     
     const sales = metrics.current_month.sales;
     const diffText = isIncrease ? "más" : "menos";
-    return `Se han realizado ${sales} ventas este mes, un ${formattedDifference}% ${diffText} que el mes anterior. ${isIncrease ? "¡Sigue así!" : ""}`;
+    return `Se han realizado ${sales} servicios este mes, un ${formattedDifference}% ${diffText} que el mes anterior. ${isIncrease ? "¡Sigue así!" : ""}`;
   };
 
   return (
@@ -138,10 +138,10 @@ export default function MonthlyTarget() {
         <div className="flex justify-between">
           <div>
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Ventas Mensuales
+              Servicios Mensuales
             </h3>
             <p className="mt-1 font-normal text-gray-500 text-theme-sm dark:text-gray-400">
-              Total de ventas realizadas este mes
+              Total de servicios realizados este mes
             </p>
           </div>
           <div className="relative inline-block">

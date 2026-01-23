@@ -28,7 +28,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   {
     icon: <GridIcon />,
-    name: "Dashboard",
+    name: "Panel",
     path: "/",
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
   },
@@ -37,19 +37,18 @@ const navItems: NavItem[] = [
     icon: <UserCircleIcon />,
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
     subItems: [
-      { name: "Usuarios", path: "/users", allowedRoles: ['SUPER_ADMIN',] },
+      // { name: "Usuarios", path: "/users", allowedRoles: ['SUPER_ADMIN',] },
       { name: "Mecanicos", path: "/mechanics", allowedRoles: ['SUPER_ADMIN'] },
       { name: "Clientes", path: "/customers", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
+      { name: "Vehículos", path: "/vehicles", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
     ]
   },
 
   {
     name: "Repuestos",
     icon: <BoxIcon className="w-6 h-6" />,
+    path: '/spare-parts',
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
-    subItems: [
-      { name: "Repuestos", path: "/spare", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
-    ]
   },
   {
     name: "Servicios",
@@ -64,11 +63,7 @@ const navItems: NavItem[] = [
     name: "Reportes",
     icon: <PageIcon className="w-6 h-6" />,
     allowedRoles: ['ADMINISTRATOR', 'SUPER_ADMIN', 'BRANCH_MANAGER', 'FINANCE'],
-    subItems: [
-      { name: "Reporte de Ventas", path: "/reports/sales", allowedRoles: ['ADMINISTRATOR', 'SUPER_ADMIN', 'BRANCH_MANAGER', 'FINANCE', 'CASHIER', 'SALESMAN'] },
-      { name: "Reporte de Inventario", path: "/reports/inventory", allowedRoles: ['ADMINISTRATOR', 'SUPER_ADMIN', 'INVENTORY_MANAGER', 'BRANCH_MANAGER', 'CASHIER', 'SALESMAN', 'FINANCE'] },
-      { name: "Movimientos de Stock", path: "/stock-movements", allowedRoles: ['ADMINISTRATOR', 'SUPER_ADMIN', 'INVENTORY_MANAGER', 'BRANCH_MANAGER', 'CASHIER', 'SALESMAN', 'FINANCE'] },
-    ]
+    path:'/reports/services'
   },
   {
     name: "Notificaciones",

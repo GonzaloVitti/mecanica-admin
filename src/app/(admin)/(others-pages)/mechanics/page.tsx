@@ -200,20 +200,36 @@ const MechanicsPage = () => {
     try {
       setLoading(true);
       const offset = (page - 1) * itemsPerPage;
-      let url = `/api/mechanics/?limit=${itemsPerPage}&offset=${offset}`;
+      let url = `/api/users/?limit=${itemsPerPage}&offset=${offset}`;
       
-      if (search.trim()) {
-        url += `&search=${encodeURIComponent(search.trim())}`;
-      }
+      // El backend de usuarios no soporta búsqueda, filtramos localmente
 
       const data = await fetchApi<ApiResponse>(url, {
         method: 'GET',
       });
 
       if (data) {
-        setMechanics(data.results);
-        setTotalCount(data.count);
-        setTotalPages(Math.ceil(data.count / itemsPerPage));
+        const onlyMechanics = data.results.filter(u => u.role === 'MECHANIC');
+        const filteredBySearch = search.trim()
+          ? onlyMechanics.filter(m => (
+              `${m.first_name} ${m.last_name}`.toLowerCase().includes(search.trim().toLowerCase()) ||
+              (m.email || '').toLowerCase().includes(search.trim().toLowerCase()) ||
+              (m.phone_number || '').toLowerCase().includes(search.trim().toLowerCase())
+            ))
+          : onlyMechanics;
+
+        setMechanics(filteredBySearch);
+
+        // Obtener conteo real de mecánicos (opcional)
+        try {
+          const counts = await fetchApi<Array<{ role: string; count: number }>>('/api/users/count/');
+          const mechCount = counts?.find(c => c.role === 'MECHANIC')?.count ?? filteredBySearch.length;
+          setTotalCount(mechCount);
+          setTotalPages(Math.ceil(mechCount / itemsPerPage));
+        } catch {
+          setTotalCount(filteredBySearch.length);
+          setTotalPages(Math.ceil(filteredBySearch.length / itemsPerPage));
+        }
       } else {
         showAlert('error', 'Error', 'No se pudieron cargar los mecánicos');
       }
@@ -228,12 +244,8 @@ const MechanicsPage = () => {
   // Función para eliminar mecánico
   const deleteMechanic = async (mechanicId: string) => {
     try {
-      const result = await fetchApi(`/api/users/${mechanicId}/`, {
+      const result = await fetchApi(`/api/users/${mechanicId}/delete_account/`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-          'Content-Type': 'application/json',
-        },
       });
 
       // Para DELETE, fetchApi devuelve null si es exitoso
@@ -254,10 +266,6 @@ const MechanicsPage = () => {
     try {
       const data = await fetchApi(`/api/users/${mechanicId}/toggle_active_status/`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-          'Content-Type': 'application/json',
-        },
       });
 
       if (data) {
@@ -277,10 +285,6 @@ const MechanicsPage = () => {
     try {
       const data = await fetchApi(`/api/users/${mechanicId}/toggle_verified_status/`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-          'Content-Type': 'application/json',
-        },
       });
 
       if (data) {

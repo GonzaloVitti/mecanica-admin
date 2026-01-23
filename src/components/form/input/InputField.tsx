@@ -28,6 +28,7 @@ const Input: FC<InputProps> = ({
   name,
   placeholder,
   defaultValue,
+  value,
   onChange,
   onFocus,
   className = "",
@@ -65,7 +66,8 @@ const Input: FC<InputProps> = ({
         id={id}
         name={name}
         placeholder={placeholder}
-        defaultValue={defaultValue}
+        value={value as any}
+        defaultValue={value === undefined ? defaultValue : undefined}
         onChange={onChange}
         onFocus={onFocus}
         min={min}

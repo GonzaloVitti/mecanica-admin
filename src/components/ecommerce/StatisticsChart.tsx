@@ -224,11 +224,11 @@ export default function StatisticsChart() {
       case 'monthly':
         return [
           {
-            name: "Ventas Completadas",
+            name: "Servicios Completados",
             data: loading ? new Array(12).fill(0) : completedSales,
           },
           {
-            name: "Ventas Pendientes",
+            name: "Servicios Pendientes",
             data: loading ? new Array(12).fill(0) : pendingSales,
           },
         ];
@@ -254,11 +254,11 @@ export default function StatisticsChart() {
   const getChartSubtitle = () => {
     switch (activeTab) {
       case 'monthly':
-        return "Resumen de ventas mensuales";
+        return "Resumen de servicios mensuales";
       case 'quarterly':
-        return "Resumen de ventas cuatrimestrales";
+        return "Resumen de servicios cuatrimestrales";
       case 'yearly':
-        return "Resumen de ventas anuales";
+        return "Resumen de servicios anuales";
       default:
         return "";
     }
@@ -273,7 +273,7 @@ export default function StatisticsChart() {
       <div className="flex flex-col gap-5 mb-6 sm:flex-row sm:justify-between">
         <div className="w-full">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-            Estadísticas de Ventas
+            Estadísticas de Servicios
           </h3>
           <p className="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
             {getChartSubtitle()}

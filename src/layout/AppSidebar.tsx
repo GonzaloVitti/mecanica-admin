@@ -33,6 +33,12 @@ const navItems: NavItem[] = [
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
   },
   {
+    name: "Servicios",
+    icon: <CarLineIcon className="w-6 h-6" />,
+    path: '/services',
+    allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
+  },
+  {
     name: "Usuarios",
     icon: <UserCircleIcon />,
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
@@ -41,6 +47,7 @@ const navItems: NavItem[] = [
       { name: "Mecanicos", path: "/mechanics", allowedRoles: ['SUPER_ADMIN'] },
       { name: "Clientes", path: "/customers", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
       { name: "Vehículos", path: "/vehicles", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
+      { name: "Cuentas Corrientes", path: "/accounts", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
     ]
   },
 
@@ -51,19 +58,10 @@ const navItems: NavItem[] = [
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
   },
   {
-    name: "Servicios",
-    icon: <CarLineIcon className="w-6 h-6" />,
-    allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
-    subItems: [
-      { name: "Servicios", path: "/services", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
-      { name: "ARCA", path: "/arca", allowedRoles: ['SUPER_ADMIN'] },
-    ]
-  },
-  {
-    name: "Mis Servicios",
-    icon: <CarLineIcon className="w-6 h-6" />,
-    path: "/my-services",
-    allowedRoles: ['CUSTOMER']
+    name: "Facturacion",
+    icon: <PageIcon className="w-6 h-6" />,
+    path: '/arca',
+    allowedRoles: ['SUPER_ADMIN'],
   },
   {
     name: "Reportes",

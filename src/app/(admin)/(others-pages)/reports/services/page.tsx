@@ -55,8 +55,14 @@ const ServicesReportsPage = () => {
   const [mechanics, setMechanics] = useState<Mechanic[]>([])
   const [selectedMechanic, setSelectedMechanic] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
-  const [startDate, setStartDate] = useState<string>('')
-  const [endDate, setEndDate] = useState<string>('')
+  const [startDate, setStartDate] = useState<string>(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+  })
+  const [endDate, setEndDate] = useState<string>(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+  })
   const [searchTerm, setSearchTerm] = useState<string>('')
 
   const showAlert = (type: AlertState['type'], title: string, message: string) => {

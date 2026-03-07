@@ -83,6 +83,7 @@ const CustomerDetail = () => {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [publicCode, setPublicCode] = useState<string>('');
+  const [accountInfo, setAccountInfo] = useState<{ id: string; balance: string } | null>(null);
 
   const profileUrl = useMemo(() => {
     const url = customer?.user?.profile_picture || '';
@@ -130,6 +131,21 @@ const CustomerDetail = () => {
           const digest = await crypto.subtle.digest('SHA-1', enc);
           const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
           setPublicCode(hex.slice(0, 8));
+
+          // Buscar Customer model por email para obtener cuenta corriente
+          if (u.email) {
+            try {
+              const custRes = await fetchApi<{ results: Array<{ id: string; account_id: string | null; account_balance: string }> }>(
+                `/api/customers/?email=${encodeURIComponent(u.email)}&limit=1`
+              );
+              const cust = custRes?.results?.[0];
+              if (cust?.account_id) {
+                setAccountInfo({ id: cust.account_id, balance: cust.account_balance || '0' });
+              } else if (cust) {
+                setAccountInfo({ id: '', balance: cust.account_balance || '0' });
+              }
+            } catch {}
+          }
         } else {
           setError('Cliente no encontrado');
         }
@@ -446,7 +462,31 @@ const CustomerDetail = () => {
             </div>
           </div>
 
-          
+          {/* Cuenta Corriente */}
+          <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800 lg:p-6">
+            <h4 className="text-lg font-semibold text-gray-800 dark:text-white/90 mb-4">Cuenta Corriente</h4>
+            {accountInfo === null ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Sin cuenta corriente registrada</p>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Saldo deudor</p>
+                  <span className={`text-lg font-semibold ${Number(accountInfo.balance) > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {Number(accountInfo.balance).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
+                  </span>
+                </div>
+                {accountInfo.id && (
+                  <Link
+                    href={`/accounts/${accountInfo.id}`}
+                    className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Ver cuenta y movimientos
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 

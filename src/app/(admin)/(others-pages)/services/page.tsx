@@ -99,6 +99,14 @@ const ServicesPage = () => {
     loadItems()
   }, [])
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1)
+      loadItems(1, searchTerm)
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
   const statusColor = (s: WorkOrder['status']) => {
     if (s === 'NEW') return 'info'
     if (s === 'IN_PROGRESS') return 'warning'
@@ -141,104 +149,6 @@ const ServicesPage = () => {
     }
   }
 
-  const printWorkOrder = async (order: WorkOrder) => {
-    const win = window.open('', '_blank')
-    if (!win) return
-    const detail = await fetchApi<any>(`/api/work-orders/${order.id}/`, { method: 'GET' })
-    const logoUrl = (process.env.NEXT_PUBLIC_WORKSHOP_LOGO_URL || '').trim()
-    const shopName = (process.env.NEXT_PUBLIC_WORKSHOP_NAME || 'Nombre del Taller').trim()
-    const shopAddress = (process.env.NEXT_PUBLIC_WORKSHOP_ADDRESS || '').trim()
-    const shopPhone = (process.env.NEXT_PUBLIC_WORKSHOP_PHONE || '').trim()
-    const shopEmail = (process.env.NEXT_PUBLIC_WORKSHOP_EMAIL || '').trim()
-    const items = Array.isArray(detail?.items) ? detail.items : []
-    const workDescription = String(detail?.work_description || '')
-    const notes = String(detail?.notes || '')
-    const laborItems = items.filter((it: any) => it.item_type === 'LABOR')
-    const partItems = items.filter((it: any) => it.item_type === 'PART')
-    const sumBase = (arr: any[]) => arr.reduce((acc, it) => acc + Number(it.quantity || 0) * Number(it.unit_price || 0), 0)
-    const sumTax = (arr: any[]) => arr.reduce((acc, it) => { const b = Number(it.quantity || 0) * Number(it.unit_price || 0); const t = Number(it.tax_rate || 0); return acc + b * (t / 100) }, 0)
-    const fmt = (v: number | string) => formatCurrency(v)
-    const laborRows = laborItems.map((it: any) => { const qty = Number(it.quantity || 0); const price = Number(it.unit_price || 0); const base = qty * price; const iva = base * (Number(it.tax_rate || 0) / 100); const tot = base + iva; return `<tr><td>${it.description || ''}</td><td>${qty}</td><td>${fmt(price)}</td><td>${fmt(base)}</td><td>${fmt(iva)}</td><td>${fmt(tot)}</td></tr>` }).join('')
-    const partRows = partItems.map((it: any) => { const qty = Number(it.quantity || 0); const price = Number(it.unit_price || 0); const base = qty * price; const iva = base * (Number(it.tax_rate || 0) / 100); const tot = base + iva; return `<tr><td>${it.description || ''}</td><td>${qty}</td><td>${fmt(price)}</td><td>${fmt(base)}</td><td>${fmt(iva)}</td><td>${fmt(tot)}</td></tr>` }).join('')
-    const grandTotal = sumBase(items) + sumTax(items)
-    const styles = `
-      <style>
-        body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; padding: 24px; color: #111827; }
-        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .logo-box { width: 140px; height: 90px; border: 1px dashed #D1D5DB; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 6px; background: #F9FAFB; }
-        .logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .company { text-align: right; font-size: 12px; color: #374151; }
-        .company .name { font-size: 16px; font-weight: 600; color: #111827; }
-        .title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
-        .section { margin-top: 16px; }
-        .label { font-weight: 600; }
-        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th, td { border: 1px solid #E5E7EB; padding: 8px; font-size: 12px; text-align: left; }
-        th { background: #F3F4F6; }
-        .section-title { font-size: 14px; font-weight: 600; margin-top: 16px; }
-        .totals { margin-top: 8px; text-align: right; }
-        .muted { color: #6B7280; }
-      </style>
-    `
-    const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Servicio ${order.work_order_number}</title>
-          ${styles}
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo-box">${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ''}</div>
-            <div class="company">
-              <div class="name">${shopName}</div>
-              ${shopAddress ? `<div>${shopAddress}</div>` : ''}
-              ${shopPhone ? `<div>${shopPhone}</div>` : ''}
-              ${shopEmail ? `<div>${shopEmail}</div>` : ''}
-            </div>
-          </div>
-          <div class="title">Presupuesto / Servicio ${order.work_order_number}</div>
-          <div class="grid section">
-            <div><span class="label">Cliente:</span> ${order.customer_name || '—'}</div>
-            <div><span class="label">Teléfono:</span> ${order.customer_phone || '—'}</div>
-            <div><span class="label">Vehículo:</span> ${[order.vehicle_brand, order.vehicle_model].filter(Boolean).join(' ') || '—'}</div>
-            <div><span class="label">Patente:</span> ${order.vehicle_license_plate || '—'}</div>
-          </div>
-          <div class="section"><span class="label">Trabajo a realizar:</span> ${workDescription || '—'}</div>
-          <div class="section-title">Mano de obra</div>
-          <table>
-            <thead>
-              <tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th>IVA</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              ${laborRows || `<tr><td colspan="6" class="muted">Sin mano de obra</td></tr>`}
-            </tbody>
-          </table>
-          <div class="totals"><span class="label">Subtotal mano de obra:</span> ${fmt(sumBase(laborItems) + sumTax(laborItems))}</div>
-          <div class="section-title">Repuestos</div>
-          <table>
-            <thead>
-              <tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th>IVA</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              ${partRows || `<tr><td colspan="6" class="muted">Sin repuestos</td></tr>`}
-            </tbody>
-          </table>
-          <div class="totals"><span class="label">Subtotal repuestos:</span> ${fmt(sumBase(partItems) + sumTax(partItems))}</div>
-          <div class="totals"><span class="label">Total:</span> ${fmt(grandTotal)}</div>
-          <div class="section"><span class="label">Notas:</span> ${notes || '—'}</div>
-        </body>
-      </html>
-    `
-    win.document.open()
-    win.document.write(html)
-    win.document.close()
-    win.focus()
-    win.print()
-    win.close()
-  }
 
   return (
     <div className="p-6">
@@ -302,8 +212,7 @@ const ServicesPage = () => {
                       <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                         <div className="flex items-center gap-2">
                           <Link href={`/services/${item.id}`} className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400">Ver</Link>
-                          <button onClick={() => printWorkOrder(item)} className="px-3 py-1 text-xs text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300">Imprimir</button>
-                          <button onClick={() => openQuotePdf(item.id)} className="px-3 py-1 text-xs text-indigo-700 bg-indigo-100 rounded-md hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300">PDF Presupuesto</button>
+                          <button onClick={() => openQuotePdf(item.id)} className="px-3 py-1 text-xs text-indigo-700 bg-indigo-100 rounded-md hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300">Imprimir</button>
                           {item.status === 'NEW' && (
                             <button onClick={() => callAction(item.id, 'start')} className="px-3 py-1 text-xs text-green-600 bg-green-100 rounded-md hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400">Iniciar</button>
                           )}

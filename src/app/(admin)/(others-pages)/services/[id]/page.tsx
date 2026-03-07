@@ -5,15 +5,11 @@ import Link from 'next/link'
 import Alert from '@/components/ui/alert/Alert'
 import Label from '@/components/form/Label'
 import Input from '@/components/form/input/InputField'
-import Select from '@/components/form/Select'
 import Button from '@/components/ui/button/Button'
 import { fetchApi } from '@/app/lib/data'
 import ProductSearch from '@/components/product/ProductSearch'
-import CommonMultiSelect from '@/components/common/MultiSelect'
 import Badge from '@/components/ui/badge/Badge'
 
-interface Customer { id: string; name: string; phone: string }
-interface Vehicle { id: string; license_plate: string; brand: string; model: string; year: string }
 interface Product { id: string; name: string; retail_price: string; current_stock: number; barcode?: string }
 
 type ItemType = 'LABOR' | 'PART'
@@ -33,17 +29,19 @@ interface WorkOrderResp {
   work_order_number: string
   status: string
   priority: 'LOW' | 'MEDIUM' | 'HIGH'
-  customer: string | null
+  customer: { id: string; name: string; phone: string } | null
   customer_name: string
   customer_phone: string
   vehicle: string | null
   vehicle_license_plate: string
   vehicle_brand: string
   vehicle_model: string
+  vehicle_year?: string
   promised_date?: string
   work_description: string
   notes: string
   items: any[]
+  mechanics?: any[]
 }
 
 interface AlertState { show: boolean; type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string }
@@ -55,9 +53,6 @@ const EditServicePage = () => {
   const [alert, setAlert] = useState<AlertState>({ show: false, type: 'info', title: '', message: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
-
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [mechanics, setMechanics] = useState<any[]>([])
 
@@ -85,29 +80,19 @@ const EditServicePage = () => {
     setTimeout(() => setAlert(prev => ({ ...prev, show: false })), 5000)
   }
 
-  const customerOptions = useMemo(() => customers.map(c => ({ value: c.id, label: `${c.name} ${c.phone ? `• ${c.phone}` : ''}` })), [customers])
-  const vehicleOptions = useMemo(() => vehicles.map(v => ({ value: v.id, label: `${v.license_plate} • ${v.brand} ${v.model} ${v.year || ''}` })), [vehicles])
-  const mechanicOptions = useMemo(() => mechanics.map((m: any) => ({ value: m.id, label: `${m.first_name || ''} ${m.last_name || ''}${m.phone_number ? ` • ${m.phone_number}` : ''}` })), [mechanics])
-
-  useEffect(() => {
-    const loadCommon = async () => {
-      try {
-        const cs = await fetchApi<{ results: Customer[] }>(`/api/customers/?limit=100`, { method: 'GET' })
-        setCustomers(cs?.results || [])
-        const ps = await fetchApi<{ results: any[] }>(`/api/spare-parts/?limit=200`, { method: 'GET' })
-        setProducts((ps?.results || []).map(p => ({ id: p.id, name: p.name, retail_price: p.retail_price, current_stock: p.current_stock, barcode: p.barcode || undefined })))
-        const us = await fetchApi<{ results: any[] }>(`/api/users/?limit=200`, { method: 'GET' })
-        setMechanics((us?.results || []).filter(u => u.role === 'MECHANIC'))
-      } catch {}
-    }
-    loadCommon()
-  }, [])
+  const mechanicOptions = useMemo(() => mechanics.map((m: any) => ({ value: String(m.id), label: `${m.first_name || ''} ${m.last_name || ''}`.trim() })), [mechanics])
 
   useEffect(() => {
     const loadOrder = async () => {
       try {
         setLoading(true)
-        const data = await fetchApi<WorkOrderResp>(`/api/work-orders/${id}/`, { method: 'GET' })
+        const [data, ps, us] = await Promise.all([
+          fetchApi<WorkOrderResp>(`/api/work-orders/${id}/`, { method: 'GET' }),
+          fetchApi<{ results: any[] }>(`/api/spare-parts/?limit=200`, { method: 'GET' }),
+          fetchApi<{ results: any[] }>(`/api/users/?limit=200`, { method: 'GET' }),
+        ])
+        setProducts((ps?.results || []).map(p => ({ id: p.id, name: p.name, retail_price: p.retail_price, current_stock: p.current_stock, barcode: p.barcode || undefined })))
+        setMechanics((us?.results || []).filter(u => u.role === 'MECHANIC'))
         if (!data) return
         setWorkOrderNumber(data.work_order_number || '')
         setCustomerName(data.customer_name || '')
@@ -115,23 +100,18 @@ const EditServicePage = () => {
         setVehiclePlate(data.vehicle_license_plate || '')
         setVehicleBrand(data.vehicle_brand || '')
         setVehicleModel(data.vehicle_model || '')
-        setCustomerId(data.customer || '')
-        setVehicleId(data.vehicle || '')
+        setCustomerId(data.customer?.id ?? data.customer ?? '')
         setPriority(data.priority || 'MEDIUM')
         setPromisedDate(data.promised_date ? new Date(data.promised_date).toISOString().slice(0, 16) : '')
         setWorkDescription(data.work_description || '')
         setNotes(data.notes || '')
         setItems((data.items || []).map((it: any) => ({ id: it.id, item_type: it.item_type, product: it.product || '', description: it.description || '', quantity: String(it.quantity || '1'), unit_price: String(it.unit_price || '0'), tax_rate: String(it.tax_rate || '0') })))
         const assignedRaw: any = (data as any).assigned_mechanics || (data as any).mechanics || []
-        const assignedIds = Array.isArray(assignedRaw) ? assignedRaw.map((m: any) => (typeof m === 'string' ? m : m?.id)).filter(Boolean) : []
+        const assignedIds = Array.isArray(assignedRaw)
+          ? assignedRaw.map((m: any) => String(typeof m === 'string' ? m : m?.id)).filter(s => s && s !== 'undefined' && s !== 'null')
+          : []
         setSelectedMechanics(assignedIds)
-        if (data.customer) {
-          const vs = await fetchApi<{ results: Vehicle[] }>(`/api/vehicles/?owner=${data.customer}&limit=100`, { method: 'GET' })
-          setVehicles(vs?.results || [])
-        } else {
-          const vs = await fetchApi<{ results: Vehicle[] }>(`/api/vehicles/?limit=100`, { method: 'GET' })
-          setVehicles(vs?.results || [])
-        }
+        setVehicleId((data.vehicle as any)?.id ?? data.vehicle ?? '')
         try {
           const allocRes = await fetchApi<{ results: any[] }>(`/api/work-order-payment-allocations/?work_order=${id}&limit=100`)
           setAllocations((allocRes?.results || []).map(a => ({ id: a.id, method: a.method, amount: Number(a.amount || 0), created_at: a.created_at })))
@@ -160,15 +140,6 @@ const EditServicePage = () => {
     if (id) loadOrder()
   }, [id])
 
-  useEffect(() => {
-    const loadVehicles = async () => {
-      if (!customerId) return
-      const vs = await fetchApi<{ results: Vehicle[] }>(`/api/vehicles/?owner=${customerId}&limit=100`, { method: 'GET' })
-      setVehicles(vs?.results || [])
-    }
-    loadVehicles()
-  }, [customerId])
-
   const addLaborItem = () => setItems(prev => [...prev, { item_type: 'LABOR', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
   const addPartItem = () => setItems(prev => [...prev, { item_type: 'PART', product: '', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
   const updateItem = (index: number, patch: Partial<WorkOrderItemForm>) => setItems(prev => prev.map((it, i) => i === index ? { ...it, ...patch } : it))
@@ -185,7 +156,7 @@ const EditServicePage = () => {
           promised_date: promisedDate || null,
           work_description: workDescription || '',
           notes: notes || '',
-          assigned_mechanics: selectedMechanics,
+          mechanics: selectedMechanics,
           items: items.map(it => ({
             id: it.id,
             item_type: it.item_type,
@@ -211,104 +182,14 @@ const EditServicePage = () => {
     return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
   }
 
-  const printService = () => {
-    const win = window.open('', '_blank')
-    if (!win) return
-    const logoUrl = (process.env.NEXT_PUBLIC_WORKSHOP_LOGO_URL || '').trim()
-    const shopName = (process.env.NEXT_PUBLIC_WORKSHOP_NAME || 'Nombre del Taller').trim()
-    const shopAddress = (process.env.NEXT_PUBLIC_WORKSHOP_ADDRESS || '').trim()
-    const shopPhone = (process.env.NEXT_PUBLIC_WORKSHOP_PHONE || '').trim()
-    const shopEmail = (process.env.NEXT_PUBLIC_WORKSHOP_EMAIL || '').trim()
-    const mechNames = mechanics.filter((m: any) => selectedMechanics.includes(String(m.id))).map((m: any) => `${m.first_name || ''} ${m.last_name || ''}`.trim()).filter(Boolean)
-    const laborItems = items.filter(it => it.item_type === 'LABOR')
-    const partItems = items.filter(it => it.item_type === 'PART')
-    const sumBase = (arr: typeof items) => arr.reduce((acc, it) => acc + Number(it.quantity || '0') * Number(it.unit_price || '0'), 0)
-    const sumTax = (arr: typeof items) => arr.reduce((acc, it) => { const b = Number(it.quantity || '0') * Number(it.unit_price || '0'); const t = Number(it.tax_rate || '0'); return acc + b * (t / 100) }, 0)
-    const laborRows = laborItems.map(it => { const qty = Number(it.quantity || '0'); const price = Number(it.unit_price || '0'); const base = qty * price; const iva = base * (Number(it.tax_rate || '0') / 100); const tot = base + iva; return `<tr><td>${it.description || ''}</td><td>${qty}</td><td>${formatCurrency(price)}</td><td>${formatCurrency(base)}</td><td>${formatCurrency(iva)}</td><td>${formatCurrency(tot)}</td></tr>` }).join('')
-    const partRows = partItems.map(it => { const qty = Number(it.quantity || '0'); const price = Number(it.unit_price || '0'); const base = qty * price; const iva = base * (Number(it.tax_rate || '0') / 100); const tot = base + iva; const prod = products.find(p => p.id === (it.product || '')); const code = prod?.barcode || '—'; const desc = it.description || prod?.name || ''; return `<tr><td>${code}</td><td>${desc}</td><td>${qty}</td><td>${formatCurrency(price)}</td><td>${formatCurrency(base)}</td><td>${formatCurrency(iva)}</td><td>${formatCurrency(tot)}</td></tr>` }).join('')
-    const grandTotal = sumBase(items) + sumTax(items)
-    const styles = `
-      <style>
-        body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'; padding: 24px; color: #111827; }
-        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .logo-box { width: 140px; height: 90px; border: 1px dashed #D1D5DB; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 6px; background: #F9FAFB; }
-        .logo-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .company { text-align: right; font-size: 12px; color: #374151; }
-        .company .name { font-size: 16px; font-weight: 600; color: #111827; }
-        .title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
-        .section { margin-top: 16px; }
-        .label { font-weight: 600; }
-        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; font-size: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th, td { border: 1px solid #E5E7EB; padding: 8px; font-size: 12px; text-align: left; }
-        th { background: #F3F4F6; }
-        .section-title { font-size: 14px; font-weight: 600; margin-top: 16px; }
-        .totals { margin-top: 8px; text-align: right; }
-        .muted { color: #6B7280; }
-      </style>
-    `
-    const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Servicio ${workOrderNumber}</title>
-          ${styles}
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo-box">${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ''}</div>
-            <div class="company">
-              <div class="name">${shopName}</div>
-              ${shopAddress ? `<div>${shopAddress}</div>` : ''}
-              ${shopPhone ? `<div>${shopPhone}</div>` : ''}
-              ${shopEmail ? `<div>${shopEmail}</div>` : ''}
-            </div>
-          </div>
-          <div class="title">Presupuesto / Servicio ${workOrderNumber}</div>
-          <div class="grid section">
-            <div><span class="label">Cliente:</span> ${customerName || '—'}</div>
-            <div><span class="label">Teléfono:</span> ${customerPhone || '—'}</div>
-            <div><span class="label">Vehículo:</span> ${[vehicleBrand, vehicleModel].filter(Boolean).join(' ') || '—'}</div>
-            <div><span class="label">Patente:</span> ${vehiclePlate || '—'}</div>
-            ${mechNames.length ? `<div class="muted">Mecánicos: ${mechNames.join(', ')}</div>` : ''}
-          </div>
-          <div class="section"><span class="label">Trabajo a realizar:</span> ${workDescription || '—'}</div>
-          <div class="section-title">Mano de obra</div>
-          <table>
-            <thead>
-              <tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th>IVA</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              ${laborRows || `<tr><td colspan="6" class="muted">Sin mano de obra</td></tr>`}
-            </tbody>
-          </table>
-          <div class="totals"><span class="label">Subtotal mano de obra:</span> ${formatCurrency(sumBase(laborItems) + sumTax(laborItems))}</div>
-          <div class="section-title">Repuestos</div>
-          <table>
-            <thead>
-              <tr><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th>IVA</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              ${partRows || `<tr><td colspan="7" class="muted">Sin repuestos</td></tr>`}
-            </tbody>
-          </table>
-          <div class="totals"><span class="label">Subtotal repuestos:</span> ${formatCurrency(sumBase(partItems) + sumTax(partItems))}</div>
-          <div class="totals"><span class="label">Total:</span> ${formatCurrency(grandTotal)}</div>
-          <div class="section"><span class="label">Notas:</span> ${notes || '—'}</div>
-        </body>
-      </html>
-    `
-    win.document.open()
-    win.document.write(html)
-    win.document.close()
-    win.focus()
-    win.print()
-    win.close()
-  }
   const openQuotePdf = async () => {
     try {
-      const res = await fetch(`/api/work-orders/${id}/quote_pdf/`, { method: 'GET' })
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim()
+      const jwt_token = localStorage.getItem('token') || ''
+      const res = await fetch(`${baseUrl}/api/work-orders/${id}/quote_pdf/`, {
+        method: 'GET',
+        headers: jwt_token ? { Authorization: `Bearer ${jwt_token}` } : {}
+      })
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -354,8 +235,7 @@ const EditServicePage = () => {
       <div className="flex justify-between items-center mb-6">
         <Link href="/services" className="flex items-center gap-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg><span>Volver a servicios</span></Link>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={printService}>Imprimir</Button>
-          <Button variant="outline" onClick={openQuotePdf}>PDF Presupuesto</Button>
+          <Button variant="outline" onClick={openQuotePdf}>Imprimir</Button>
           <Button onClick={generateAfipInvoice}>Factura AFIP (borrador)</Button>
         </div>
       </div>
@@ -368,15 +248,37 @@ const EditServicePage = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <Label>Cliente</Label>
-              <Select options={customerOptions} value={customerId} onChange={setCustomerId} placeholder="Selecciona un cliente" />
+              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800">
+                <p className="text-sm font-medium text-gray-800 dark:text-white/90">{customerName || '—'}</p>
+                {customerPhone && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{customerPhone}</p>}
+              </div>
             </div>
             <div>
               <Label>Vehículo</Label>
-              <Select options={vehicleOptions} value={vehicleId} onChange={setVehicleId} placeholder="Selecciona un vehículo" />
+              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800">
+                {vehiclePlate || vehicleBrand ? (
+                  <>
+                    <p className="text-sm font-medium text-gray-800 dark:text-white/90">{vehiclePlate || '—'}</p>
+                    {(vehicleBrand || vehicleModel) && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{[vehicleBrand, vehicleModel].filter(Boolean).join(' ')}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400 dark:text-gray-500">Sin vehículo</p>
+                )}
+              </div>
             </div>
             <div>
               <Label>Mecánicos</Label>
-              <CommonMultiSelect options={mechanicOptions} values={selectedMechanics} placeholder="Selecciona mecánicos" onChange={setSelectedMechanics} />
+              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800 min-h-[42px]">
+                {selectedMechanics.length > 0 ? (
+                  <p className="text-sm text-gray-800 dark:text-white/90">
+                    {mechanicOptions.filter(m => selectedMechanics.includes(m.value)).map(m => m.label).join(', ') || '—'}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-400 dark:text-gray-500">Sin mecánicos asignados</p>
+                )}
+              </div>
             </div>
             <div>
               <Label>Prioridad</Label>

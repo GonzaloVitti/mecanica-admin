@@ -73,8 +73,8 @@ const AccountDetailPage = () => {
       setAccount(acc)
       const cust = await fetchApi<Customer>(`/api/customers/${acc.customer}/`)
       if (cust) setCustomer(cust)
-      const mv = await fetchApi<ApiResponse<Movement>>(`/api/account-movements/?account=${id}&limit=200`)
-      setMovements(mv?.results || [])
+      const mv = await fetchApi<Movement[] | ApiResponse<Movement>>(`/api/customer-accounts/${id}/movements/`)
+      setMovements(Array.isArray(mv) ? mv : (mv?.results || []))
     } catch (e) {
       setError('Error al cargar la cuenta')
     } finally {
@@ -104,7 +104,7 @@ const AccountDetailPage = () => {
     }
     try {
       setIsSubmitting(true)
-      const payment = await fetchApi<any>('/api/payments/', {
+      await fetchApi<any>('/api/payments/', {
         method: 'POST',
         body: {
           customer: customer.id,
@@ -115,11 +115,9 @@ const AccountDetailPage = () => {
           notes: 'Pago a cuenta'
         }
       })
-      if (payment) {
-        setAlert({ show: true, type: 'success', title: 'Pago registrado', message: 'Se imputó el pago a la cuenta corriente' })
-        setPayAmount('')
-        await loadData()
-      }
+      setAlert({ show: true, type: 'success', title: 'Pago registrado', message: 'Se imputó el pago a la cuenta corriente' })
+      setPayAmount('')
+      await loadData()
     } catch {
       setAlert({ show: true, type: 'error', title: 'Error', message: 'No se pudo registrar el pago' })
     } finally {

@@ -40,6 +40,7 @@ interface Customer {
   has_user_account: boolean;
   created_at: string;
   updated_at: string;
+  public_code?: string;
 }
 
 // Interfaz para el formulario de edición
@@ -81,6 +82,7 @@ const CustomerDetail = () => {
   });
   const [updateLoading, setUpdateLoading] = useState(false);
   const [profileFile, setProfileFile] = useState<File | null>(null);
+  const [publicCode, setPublicCode] = useState<string>('');
 
   const profileUrl = useMemo(() => {
     const url = customer?.user?.profile_picture || '';
@@ -123,6 +125,11 @@ const CustomerDetail = () => {
             address: composed.address,
             is_active: composed.is_active,
           });
+          const text = `${composed.id}|${composed.email || ''}|${composed.phone || ''}`;
+          const enc = new TextEncoder().encode(text);
+          const digest = await crypto.subtle.digest('SHA-1', enc);
+          const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+          setPublicCode(hex.slice(0, 8));
         } else {
           setError('Cliente no encontrado');
         }
@@ -323,6 +330,26 @@ const CustomerDetail = () => {
                         {customer.has_user_account ? "Cuenta de Usuario" : "Sin Cuenta"}
                       </Badge>
                     </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Código público</span>
+                    <span className="font-mono text-sm">{publicCode || '—'}</span>
+                    {publicCode && (
+                      <>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(publicCode)}
+                          className="px-2 py-1 text-xs rounded-md border border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300"
+                        >
+                          Copiar
+                        </button>
+                        <Link
+                          href={`/customer-services?code=${publicCode}`}
+                          className="px-2 py-1 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          Abrir
+                        </Link>
+                      </>
+                    )}
                   </div>
                 </div>
 

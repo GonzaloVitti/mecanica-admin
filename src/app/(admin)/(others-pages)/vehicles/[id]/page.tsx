@@ -11,7 +11,7 @@ import FileInput from '@/components/form/input/FileInput'
 import { fetchApi } from '@/app/lib/data'
 
 interface Customer { id: string; name: string; phone?: string }
-interface Vehicle { id: string; license_plate: string; brand: string; model: string; year?: string; vin?: string; color?: string; owner?: string | { id: string }; image?: string }
+interface Vehicle { id: string; license_plate: string; brand: string; model: string; year?: string; color?: string; owner?: string | { id: string }; image?: string }
 
 const VehicleDetailPage = () => {
   const params = useParams()
@@ -24,7 +24,7 @@ const VehicleDetailPage = () => {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [ownerId, setOwnerId] = useState('')
-  const [form, setForm] = useState<{ license_plate: string; brand: string; model: string; year: string; vin: string; color: string }>({ license_plate: '', brand: '', model: '', year: '', vin: '', color: '' })
+  const [form, setForm] = useState<{ license_plate: string; brand: string; model: string; year: string; color: string }>({ license_plate: '', brand: '', model: '', year: '', color: '' })
   const [imageFile, setImageFile] = useState<File | null>(null)
 
   const imageUrl = useMemo(() => {
@@ -57,7 +57,6 @@ const VehicleDetailPage = () => {
             brand: v.brand || '',
             model: v.model || '',
             year: v.year || '',
-            vin: v.vin || '',
             color: v.color || '',
           })
         } else {
@@ -84,7 +83,6 @@ const VehicleDetailPage = () => {
         fd.append('brand', form.brand)
         fd.append('model', form.model)
         fd.append('year', form.year)
-        fd.append('vin', form.vin)
         fd.append('color', form.color)
         fd.append('owner', ownerId)
         fd.append('image', imageFile)
@@ -161,10 +159,6 @@ const VehicleDetailPage = () => {
           <div>
             <Label>Año</Label>
             <Input type="text" name="year" value={form.year} onChange={(e) => setForm(prev => ({ ...prev, year: e.target.value }))} placeholder="" />
-          </div>
-          <div>
-            <Label>VIN</Label>
-            <Input type="text" name="vin" value={form.vin} onChange={(e) => setForm(prev => ({ ...prev, vin: e.target.value }))} placeholder="" />
           </div>
           <div>
             <Label>Color</Label>

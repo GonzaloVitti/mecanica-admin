@@ -14,7 +14,6 @@ interface Vehicle {
   year?: string
   owner?: string | { id: string; name?: string }
   color?: string
-  vin?: string
   created_at?: string
 }
 
@@ -155,7 +154,7 @@ const VehiclesPage = () => {
                   vehicles.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell className="px-5 py-4 sm:px-6 text-start"><span className="text-gray-700 font-medium dark:text-white/80">{v.license_plate || '—'}</span></TableCell>
-                      <TableCell className="px-5 py-4 sm:px-6 text-start"><div className="flex flex-col"><span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{[v.brand, v.model].filter(Boolean).join(' ') || '—'}</span><span className="text-xs text-gray-500">{v.vin || ''}</span></div></TableCell>
+                      <TableCell className="px-5 py-4 sm:px-6 text-start"><div className="flex flex-col"><span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{[v.brand, v.model].filter(Boolean).join(' ') || '—'}</span></div></TableCell>
                       <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">{v.year || '—'}</TableCell>
                       <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">{typeof v.owner === 'object' ? (v.owner?.name || v.owner?.id) : (v.owner ? customerMap[String(v.owner)] || String(v.owner) : '—')}</TableCell>
                       <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">

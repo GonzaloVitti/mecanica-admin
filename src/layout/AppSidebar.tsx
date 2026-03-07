@@ -60,6 +60,12 @@ const navItems: NavItem[] = [
     ]
   },
   {
+    name: "Mis Servicios",
+    icon: <CarLineIcon className="w-6 h-6" />,
+    path: "/my-services",
+    allowedRoles: ['CUSTOMER']
+  },
+  {
     name: "Reportes",
     icon: <PageIcon className="w-6 h-6" />,
     allowedRoles: ['ADMINISTRATOR', 'SUPER_ADMIN', 'BRANCH_MANAGER', 'FINANCE'],

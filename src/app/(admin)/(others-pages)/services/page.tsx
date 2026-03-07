@@ -107,11 +107,38 @@ const ServicesPage = () => {
     if (s === 'CANCELLED') return 'error'
     return 'info'
   }
+  const statusLabel = (s: WorkOrder['status']) => {
+    if (s === 'NEW') return 'Nueva'
+    if (s === 'DIAGNOSTIC') return 'Diagnóstico'
+    if (s === 'IN_PROGRESS') return 'En Proceso'
+    if (s === 'WAITING_PARTS') return 'Esperando Repuestos'
+    if (s === 'ON_HOLD') return 'En Espera'
+    if (s === 'COMPLETED') return 'Completada'
+    if (s === 'DELIVERED') return 'Entregada'
+    if (s === 'CANCELLED') return 'Cancelada'
+    return s
+  }
 
   const formatCurrency = (value: string | number) => {
     const n = typeof value === 'string' ? parseFloat(value) : value
     if (Number.isNaN(n)) return '—'
     return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
+  }
+  const openQuotePdf = async (id: string) => {
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim()
+      const jwt_token = localStorage.getItem('token') || ''
+      const res = await fetch(`${baseUrl}/api/work-orders/${id}/quote_pdf/`, { method: 'GET', headers: { Authorization: `Bearer ${jwt_token}` } })
+      if (!res.ok) {
+        showAlert('error', 'Error', 'No se pudo abrir el PDF de presupuesto')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    } catch {
+      showAlert('error', 'Error', 'Ocurrió un error al abrir el presupuesto')
+    }
   }
 
   const printWorkOrder = async (order: WorkOrder) => {
@@ -235,7 +262,7 @@ const ServicesPage = () => {
       <div className="mb-6">
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="flex-1">
-            <input type="text" placeholder="Buscar por número, patente o notas" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+            <input type="text" placeholder="Buscar por número, cliente, patente o notas" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
           </div>
           <Button type="submit" variant="outline">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -267,7 +294,7 @@ const ServicesPage = () => {
                   items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="px-5 py-4 sm:px-6 text-start"><span className="text-gray-700 font-medium dark:text-white/80">{item.work_order_number}</span></TableCell>
-                      <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400"><Badge size="sm" color={statusColor(item.status)}>{item.status}</Badge></TableCell>
+                      <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400"><Badge size="sm" color={statusColor(item.status)}>{statusLabel(item.status)}</Badge></TableCell>
                       <TableCell className="px-5 py-4 sm:px-6 text-start"><div className="flex flex-col"><span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{item.customer_name || '—'}</span><span className="text-xs text-gray-500">{item.customer_phone || ''}</span></div></TableCell>
                       <TableCell className="px-5 py-4 sm:px-6 text-start"><div className="flex flex-col"><span className="font-medium text-gray-800 text-theme-sm dark:text-white/90">{item.vehicle_license_plate || '—'}</span><span className="text-xs text-gray-500">{[item.vehicle_brand, item.vehicle_model].filter(Boolean).join(' ')}</span></div></TableCell>
                       <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">{formatCurrency(item.final_total)}</TableCell>
@@ -276,6 +303,7 @@ const ServicesPage = () => {
                         <div className="flex items-center gap-2">
                           <Link href={`/services/${item.id}`} className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400">Ver</Link>
                           <button onClick={() => printWorkOrder(item)} className="px-3 py-1 text-xs text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300">Imprimir</button>
+                          <button onClick={() => openQuotePdf(item.id)} className="px-3 py-1 text-xs text-indigo-700 bg-indigo-100 rounded-md hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300">PDF Presupuesto</button>
                           {item.status === 'NEW' && (
                             <button onClick={() => callAction(item.id, 'start')} className="px-3 py-1 text-xs text-green-600 bg-green-100 rounded-md hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400">Iniciar</button>
                           )}

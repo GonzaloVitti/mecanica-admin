@@ -10,6 +10,7 @@ import Button from '@/components/ui/button/Button'
 import { fetchApi } from '@/app/lib/data'
 import ProductSearch from '@/components/product/ProductSearch'
 import CommonMultiSelect from '@/components/common/MultiSelect'
+import Badge from '@/components/ui/badge/Badge'
 
 interface Customer { id: string; name: string; phone: string }
 interface Vehicle { id: string; license_plate: string; brand: string; model: string; year: string }
@@ -74,6 +75,10 @@ const EditServicePage = () => {
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [vehicleBrand, setVehicleBrand] = useState('')
   const [vehicleModel, setVehicleModel] = useState('')
+  const [allocations, setAllocations] = useState<Array<{ id: string; method: 'CASH'|'CARD'|'TRANSFER'|'ACCOUNT'; amount: number; created_at: string }>>([])
+  const [plan, setPlan] = useState<any | null>(null)
+  const [installments, setInstallments] = useState<Array<{ id: string; number: number; due_date: string; amount: number; principal_share: number; interest_share: number; paid_amount: number; status: 'PENDING'|'PARTIAL'|'PAID'|'OVERDUE' }>>([])
+  const [payMap, setPayMap] = useState<Record<string, { amount: string; method: 'CASH'|'CARD'|'TRANSFER'|'ACCOUNT' }>>({})
 
   const showAlert = (type: AlertState['type'], title: string, message: string) => {
     setAlert({ show: true, type, title, message })
@@ -127,6 +132,25 @@ const EditServicePage = () => {
           const vs = await fetchApi<{ results: Vehicle[] }>(`/api/vehicles/?limit=100`, { method: 'GET' })
           setVehicles(vs?.results || [])
         }
+        try {
+          const allocRes = await fetchApi<{ results: any[] }>(`/api/work-order-payment-allocations/?work_order=${id}&limit=100`)
+          setAllocations((allocRes?.results || []).map(a => ({ id: a.id, method: a.method, amount: Number(a.amount || 0), created_at: a.created_at })))
+        } catch {}
+        try {
+          const plansRes = await fetchApi<{ results: any[] }>(`/api/installment-plans/?work_order=${id}&limit=10`)
+          const p = (plansRes?.results || [])[0] || null
+          setPlan(p)
+          if (p) {
+            const instRes = await fetchApi<{ results: any[] }>(`/api/installments/?plan=${p.id}&limit=400`)
+            setInstallments((instRes?.results || []).map(x => ({
+              id: x.id, number: x.number, due_date: x.due_date, amount: Number(x.amount || 0),
+              principal_share: Number(x.principal_share || 0), interest_share: Number(x.interest_share || 0),
+              paid_amount: Number(x.paid_amount || 0), status: x.status
+            })))
+          } else {
+            setInstallments([])
+          }
+        } catch {}
       } catch {
         showAlert('error', 'Error', 'No se pudo cargar el servicio')
       } finally {
@@ -282,6 +306,48 @@ const EditServicePage = () => {
     win.print()
     win.close()
   }
+  const openQuotePdf = async () => {
+    try {
+      const res = await fetch(`/api/work-orders/${id}/quote_pdf/`, { method: 'GET' })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    } catch {}
+  }
+  const generateAfipInvoice = async () => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || ''
+      const jwt_token = localStorage.getItem('token') || ''
+      const response = await fetch(`${baseUrl}/api/work-logs/generate_from_work_order/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(jwt_token ? { 'Authorization': `Bearer ${jwt_token}` } : {})
+        },
+        body: JSON.stringify({ work_order_id: id })
+      })
+      if (!response.ok) {
+        showAlert('error', 'Error', 'No se pudo generar la factura AFIP'); return
+      }
+      const invoice = await response.json()
+      const pdfRes = await fetch(`${baseUrl}/api/afip-invoices/${invoice.id}/pdf/`, {
+        method: 'GET',
+        headers: {
+          ...(jwt_token ? { 'Authorization': `Bearer ${jwt_token}` } : {})
+        }
+      })
+      if (pdfRes.ok) {
+        const blob = await pdfRes.blob()
+        const url = URL.createObjectURL(blob)
+        window.open(url, '_blank')
+      } else {
+        showAlert('warning', 'Aviso', 'Factura creada en borrador. No se pudo abrir el PDF.')
+      }
+    } catch {
+      showAlert('error', 'Error', 'Ocurrió un error al generar la factura AFIP')
+    }
+  }
 
   return (
     <div className="p-6">
@@ -289,6 +355,8 @@ const EditServicePage = () => {
         <Link href="/services" className="flex items-center gap-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg><span>Volver a servicios</span></Link>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={printService}>Imprimir</Button>
+          <Button variant="outline" onClick={openQuotePdf}>PDF Presupuesto</Button>
+          <Button onClick={generateAfipInvoice}>Factura AFIP (borrador)</Button>
         </div>
       </div>
       {alert.show && (<div className="mb-4"><Alert variant={alert.type} title={alert.title} message={alert.message} onClose={() => setAlert(prev => ({ ...prev, show: false }))} /></div>)}
@@ -371,6 +439,113 @@ const EditServicePage = () => {
             {items.length === 0 && (
               <div className="text-sm text-gray-500 dark:text-gray-400">Sin ítems</div>
             )}
+          </div>
+          <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Pagos iniciales</h3>
+            {allocations.length === 0 ? (
+              <div className="text-gray-500 dark:text-gray-400">Sin asignaciones de pago registradas</div>
+            ) : (
+              <div className="space-y-2">
+                {allocations.map(a => (
+                  <div key={a.id} className="flex items-center justify-between border rounded-md px-3 py-2 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <Badge size="sm" color={a.method === 'ACCOUNT' ? 'warning' : 'success'}>{a.method === 'ACCOUNT' ? 'Cuenta Corriente' : a.method === 'CASH' ? 'Efectivo' : a.method === 'CARD' ? 'Tarjeta' : 'Transferencia'}</Badge>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(a.amount)}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{new Date(a.created_at).toLocaleString('es-MX')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Plan de cuotas</h3>
+            {!plan ? (
+              <div className="text-gray-500 dark:text-gray-400">Sin plan de cuotas</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                  <div><Label>Total financiado</Label><div className="text-sm">{formatCurrency(Number(plan.total_amount || 0))}</div></div>
+                  <div><Label>Cuotas</Label><div className="text-sm">{plan.num_installments}</div></div>
+                  <div><Label>Interés %</Label><div className="text-sm">{Number(plan.interest_rate || 0)}</div></div>
+                </div>
+                {installments.length === 0 ? (
+                  <div className="text-gray-500 dark:text-gray-400">Sin cuotas</div>
+                ) : (
+                  <div className="space-y-2">
+                    {installments.map(inst => (
+                      <div key={inst.id} className="grid grid-cols-1 md:grid-cols-6 items-center gap-3 border rounded-md px-3 py-2 dark:border-gray-700">
+                        <div className="text-sm">#{inst.number}</div>
+                        <div className="text-sm">{new Date(inst.due_date).toLocaleDateString('es-MX')}</div>
+                        <div className="text-sm">{formatCurrency(inst.amount)}</div>
+                        <div className="text-sm">Pagado: {formatCurrency(inst.paid_amount)}</div>
+                        <div><Badge size="sm" color={inst.status === 'PAID' ? 'success' : inst.status === 'PARTIAL' ? 'warning' : 'light'}>{inst.status === 'PAID' ? 'Pagada' : inst.status === 'PARTIAL' ? 'Parcial' : inst.status === 'OVERDUE' ? 'Vencida' : 'Pendiente'}</Badge></div>
+                        <div className="flex items-center gap-2">
+                          <Input type="number" step="0.01" name={`pay_amount_${inst.id}`} value={payMap[inst.id]?.amount || ''} onChange={(e) => setPayMap(prev => ({ ...prev, [inst.id]: { ...(prev[inst.id] || { amount: '', method: 'CASH' }), amount: e.target.value } }))} placeholder="Monto" />
+                          <select className="h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" value={payMap[inst.id]?.method || 'CASH'} onChange={(e) => setPayMap(prev => ({ ...prev, [inst.id]: { ...(prev[inst.id] || { amount: '', method: 'CASH' }), method: e.target.value as any } }))}>
+                            <option value="CASH">Efectivo</option>
+                            <option value="CARD">Tarjeta</option>
+                            <option value="TRANSFER">Transferencia</option>
+                            <option value="ACCOUNT">Cuenta Corriente</option>
+                          </select>
+                          <Button variant="outline" onClick={async () => {
+                            const amt = Number(payMap[inst.id]?.amount || '0')
+                            const method = payMap[inst.id]?.method || 'CASH'
+                            if (!amt || amt <= 0) { showAlert('warning', 'Monto inválido', 'Ingresa un monto mayor a 0'); return }
+                            try {
+                              const resp = await fetchApi(`/api/installments/${inst.id}/pay/`, { method: 'POST', body: { amount: amt, method } })
+                              if (resp) {
+                                showAlert('success', 'Pago registrado', `Se registró el pago de la cuota #${inst.number}`)
+                                const instRes = await fetchApi<{ results: any[] }>(`/api/installments/?plan=${plan.id}&limit=400`)
+                                setInstallments((instRes?.results || []).map(x => ({ id: x.id, number: x.number, due_date: x.due_date, amount: Number(x.amount || 0), principal_share: Number(x.principal_share || 0), interest_share: Number(x.interest_share || 0), paid_amount: Number(x.paid_amount || 0), status: x.status })))
+                                setPayMap(prev => ({ ...prev, [inst.id]: { amount: '', method } }))
+                              }
+                            } catch {
+                              showAlert('error', 'Error', 'No se pudo registrar el pago')
+                            }
+                          }}>Pagar</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Registrar pago adicional</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <div className="md:col-span-2">
+                <Label>Monto</Label>
+                <Input type="number" step="0.01" name="extra_pay_amount" onChange={() => {}} placeholder="0.00" />
+              </div>
+              <div>
+                <Label>Método</Label>
+                <select id="extra_pay_method" className="h-11 w-full appearance-none rounded-lg border border-gray-300 px-4 py-2.5 pr-11 text-sm shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+                  <option value="CASH">Efectivo</option>
+                  <option value="CARD">Tarjeta</option>
+                  <option value="TRANSFER">Transferencia</option>
+                  <option value="ACCOUNT">Cuenta Corriente</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <Button onClick={async () => {
+                  const amountEl = document.querySelector<HTMLInputElement>('input[name="extra_pay_amount"]')
+                  const methodEl = document.getElementById('extra_pay_method') as HTMLSelectElement | null
+                  const amt = Number(amountEl?.value || '0'); const method = (methodEl?.value || 'CASH') as any
+                  if (!amt || amt <= 0) { showAlert('warning', 'Monto inválido', 'Ingresa un monto mayor a 0'); return }
+                  try {
+                    const resp = await fetchApi('/api/payments/', { method: 'POST', body: { customer: customerId || null, work_order: id, amount: amt, method, status: 'COMPLETED', notes: 'Pago adicional' } })
+                    if (resp) {
+                      showAlert('success', 'Pago registrado', 'Se registró el pago adicional')
+                      amountEl && (amountEl.value = '')
+                    }
+                  } catch {
+                    showAlert('error', 'Error', 'No se pudo registrar el pago')
+                  }
+                }}>Registrar</Button>
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-4 pt-6 mt-6 border-t border-gray-200 dark:border-gray-800">
             <button type="button" onClick={() => router.push('/services')} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:text-gray-300 dark:bg-transparent dark:border-gray-700 dark:hover:bg-gray-800">Cancelar</button>

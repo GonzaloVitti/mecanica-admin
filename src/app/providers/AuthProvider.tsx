@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = [
   '/reset-password',
   '/404',
   '/500',
+  '/customer-services',
 ];
 
 // Rutas de autenticación donde redirigir a home si ya está autenticado

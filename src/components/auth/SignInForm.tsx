@@ -7,6 +7,7 @@ import { EyeCloseIcon, EyeIcon } from "@/icons";
 import { login } from "@/app/lib/auth";
 import { useRouter } from 'next/navigation';
 import React, { useState } from "react";
+import Badge from "@/components/ui/badge/Badge";
 
 export default function SignInForm() {
   const router = useRouter();
@@ -16,6 +17,9 @@ export default function SignInForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [publicCode, setPublicCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +46,32 @@ export default function SignInForm() {
       console.error(error);
     } finally {
       setIsLoading(false);
+    }
+  };
+  const handleViewByCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const c = publicCode.trim();
+    if (!c) return;
+    setCodeError("");
+    setCodeLoading(true);
+    try {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+      const res = await fetch(`${baseUrl}/api/work-orders/public_by_code/?code=${encodeURIComponent(c)}`);
+      if (!res.ok) {
+        setCodeError("Código inválido o sin servicios");
+        return;
+      }
+      const data = await res.json();
+      const has = Array.isArray(data) ? data.length > 0 : (data && 'results' in data ? (data.results || []).length > 0 : false);
+      if (!has) {
+        setCodeError("Código inválido o sin servicios");
+        return;
+      }
+      router.push(`/customer-services?code=${encodeURIComponent(c)}`);
+    } catch {
+      setCodeError("Error al validar el código");
+    } finally {
+      setCodeLoading(false);
     }
   };
 
@@ -131,6 +161,41 @@ export default function SignInForm() {
                       {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
                     </Button>
                   </div>
+                </div>
+              </form>
+            </div>
+            <div className="relative py-3 sm:py-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200 dark:border-gray-800"></div>
+              </div>
+            </div>
+            <div className="mt-2">
+              <div className="mb-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-gray-800 dark:text-white/90">Acceso por código</h2>
+                  <Badge size="sm" color="info">Clientes</Badge>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Ingresa tu código para ver tus servicios sin iniciar sesión.</p>
+              </div>
+              {codeError && (
+                <div className="mb-3 p-3 text-sm text-red-500 bg-red-100 rounded-md dark:bg-red-900/30">
+                  {codeError}
+                </div>
+              )}
+              <form onSubmit={handleViewByCode}>
+                <div className="flex gap-2">
+                  <Input
+                    value={publicCode}
+                    onChange={(e) => setPublicCode(e.target.value)}
+                    placeholder="Código"
+                  />
+                  <Button
+                    size="sm"
+                    type="submit"
+                    disabled={codeLoading}
+                  >
+                    {codeLoading ? "Validando..." : "Ver servicios"}
+                  </Button>
                 </div>
               </form>
             </div>

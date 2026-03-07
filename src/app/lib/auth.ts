@@ -74,7 +74,7 @@ export const login = async (username: string, password: string, keepSession = fa
       const data = await response.json() as LoginResponse;
       
       // Verificar si el usuario tiene permisos para acceder al panel de administración
-      const allowedRoles = ['ADMINISTRATOR', 'SUPER_ADMIN', 'BRANCH_MANAGER', 'FINANCE', 'INVENTORY_MANAGER', 'CASHIER', 'SALESMAN'];
+      const allowedRoles = ['ADMINISTRATOR', 'SUPER_ADMIN', 'BRANCH_MANAGER', 'FINANCE', 'INVENTORY_MANAGER', 'CASHIER', 'SALESMAN', 'CUSTOMER'];
       if (!allowedRoles.includes(data.user.role)) {
         // El usuario no tiene los permisos necesarios
         console.log("Acceso denegado: se requiere uno de los roles permitidos:", allowedRoles);

@@ -80,7 +80,7 @@ const ServicesReportsPage = () => {
       } else {
         apiUrl = '/api/work-orders/'
         const params = new URLSearchParams()
-        if (selectedMechanic !== 'all') params.append('assigned_mechanics', selectedMechanic)
+        if (selectedMechanic !== 'all') params.append('mechanics', selectedMechanic)
         if (statusFilter !== 'ALL') params.append('status', statusFilter)
         if (startDate) params.append('created_at__gte', startDate)
         if (endDate) params.append('created_at__lte', endDate)
@@ -218,7 +218,7 @@ const ServicesReportsPage = () => {
         </div>
         <div className="mt-4">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Buscar</label>
-          <input type="text" placeholder="Buscar por número, cliente, patente" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+          <input type="text" placeholder="Buscar por número, cliente, patente, marca/modelo o notas" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
         </div>
       </div>
 

@@ -5,7 +5,7 @@ export function middleware(request: NextRequest) {
   const verify = request.cookies.get("token");
   const { pathname } = request.nextUrl;
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
-
+ 
   // Si no hay token y no está en signin, redirigir a signin
   if (!verify && pathname !== '/signin') {
     return NextResponse.redirect(new URL('/signin', frontendUrl));

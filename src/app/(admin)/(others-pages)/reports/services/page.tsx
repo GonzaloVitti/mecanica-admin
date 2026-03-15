@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components
 import Badge from '@/components/ui/badge/Badge'
 import { fetchApi } from '@/app/lib/data'
 import Alert from '@/components/ui/alert/Alert'
+import * as XLSX from 'xlsx'
 
 interface WorkOrder {
   id: string
@@ -64,6 +65,7 @@ const ServicesReportsPage = () => {
     return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
   })
   const [searchTerm, setSearchTerm] = useState<string>('')
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('')
 
   const showAlert = (type: AlertState['type'], title: string, message: string) => {
     setAlert({ show: true, type, title, message })
@@ -89,8 +91,8 @@ const ServicesReportsPage = () => {
         if (selectedMechanic !== 'all') params.append('mechanics', selectedMechanic)
         if (statusFilter !== 'ALL') params.append('status', statusFilter)
         if (startDate) params.append('created_at__gte', startDate)
-        if (endDate) params.append('created_at__lte', endDate)
-        if (searchTerm.trim()) params.append('search', searchTerm.trim())
+        if (endDate) params.append('created_at__lte', `${endDate}T23:59:59`)
+        if (debouncedSearch.trim()) params.append('search', debouncedSearch.trim())
         params.append('limit', '20')
         apiUrl += `?${params.toString()}`
       }
@@ -125,8 +127,13 @@ const ServicesReportsPage = () => {
   }, [])
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  useEffect(() => {
     if (!loading) fetchWorkOrders()
-  }, [selectedMechanic, statusFilter, startDate, endDate, searchTerm])
+  }, [selectedMechanic, statusFilter, startDate, endDate, debouncedSearch])
 
   const goToNextPage = () => { if (nextPageUrl) fetchWorkOrders(nextPageUrl) }
   const goToPreviousPage = () => { if (previousPageUrl) fetchWorkOrders(previousPageUrl) }
@@ -158,8 +165,107 @@ const ServicesReportsPage = () => {
     return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })
   }
 
-  const handleExportPDF = () => {
-    window.print()
+  const buildFilterParams = (limit: number) => {
+    const params = new URLSearchParams()
+    if (selectedMechanic !== 'all') params.append('mechanics', selectedMechanic)
+    if (statusFilter !== 'ALL') params.append('status', statusFilter)
+    if (startDate) params.append('created_at__gte', startDate)
+    if (endDate) params.append('created_at__lte', `${endDate}T23:59:59`)
+    if (debouncedSearch.trim()) params.append('search', debouncedSearch.trim())
+    params.append('limit', String(limit))
+    return params
+  }
+
+  const fetchAllFiltered = async (): Promise<WorkOrder[]> => {
+    const params = buildFilterParams(1000)
+    const response = await fetchApi<ApiResponse>(`/api/work-orders/?${params.toString()}`)
+    if (!response) return []
+    let results = [...response.results]
+    // If there are more pages, keep fetching
+    let next = response.next
+    while (next) {
+      const page = await fetchApi<ApiResponse>(next)
+      if (!page) break
+      results = results.concat(page.results)
+      next = page.next
+    }
+    return results
+  }
+
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExportExcel = async () => {
+    setIsExporting(true)
+    try {
+      const data = await fetchAllFiltered()
+      const rows = data.map(item => ({
+        'Número': item.work_order_number,
+        'Cliente': item.customer_name || '',
+        'Teléfono': item.customer_phone || '',
+        'Patente': item.vehicle_license_plate || '',
+        'Vehículo': [item.vehicle_brand, item.vehicle_model].filter(Boolean).join(' '),
+        'Estado': statusText(item.status),
+        'Total': parseFloat(item.final_total) || 0,
+        'Fecha': new Date(item.created_at).toLocaleDateString('es-AR'),
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      ws['!cols'] = [
+        { wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 12 },
+        { wch: 22 }, { wch: 18 }, { wch: 14 }, { wch: 14 },
+      ]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Servicios')
+      const filename = `servicios_${startDate}_${endDate}.xlsx`
+      XLSX.writeFile(wb, filename)
+    } catch {
+      showAlert('error', 'Error', 'No se pudo exportar el archivo Excel')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleExportPDF = async () => {
+    setIsExporting(true)
+    try {
+      const data = await fetchAllFiltered()
+      const { jsPDF } = await import('jspdf')
+      const autoTable = (await import('jspdf-autotable')).default
+      const doc = new jsPDF({ orientation: 'landscape' })
+
+      doc.setFontSize(16)
+      doc.text('Reporte de Servicios', 14, 16)
+      doc.setFontSize(10)
+      const filterDesc: string[] = []
+      if (startDate || endDate) filterDesc.push(`Período: ${startDate || '—'} al ${endDate || '—'}`)
+      if (statusFilter !== 'ALL') filterDesc.push(`Estado: ${statusText(statusFilter as WorkOrder['status'])}`)
+      if (debouncedSearch.trim()) filterDesc.push(`Búsqueda: "${debouncedSearch.trim()}"`)
+      if (filterDesc.length) doc.text(filterDesc.join('  |  '), 14, 24)
+      doc.text(`Total registros: ${data.length}`, 14, filterDesc.length ? 30 : 24)
+
+      autoTable(doc, {
+        startY: filterDesc.length ? 36 : 30,
+        head: [['Número', 'Cliente', 'Teléfono', 'Patente', 'Vehículo', 'Estado', 'Total', 'Fecha']],
+        body: data.map(item => [
+          item.work_order_number,
+          item.customer_name || '',
+          item.customer_phone || '',
+          item.vehicle_license_plate || '',
+          [item.vehicle_brand, item.vehicle_model].filter(Boolean).join(' '),
+          statusText(item.status),
+          formatCurrency(item.final_total),
+          new Date(item.created_at).toLocaleDateString('es-AR'),
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
+      })
+
+      const filename = `servicios_${startDate}_${endDate}.pdf`
+      doc.save(filename)
+    } catch {
+      showAlert('error', 'Error', 'No se pudo exportar el PDF')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   if (loading) {
@@ -184,7 +290,20 @@ const ServicesReportsPage = () => {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Análisis de órdenes de trabajo</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleExportPDF} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">Exportar PDF</button>
+          <button
+            onClick={handleExportExcel}
+            disabled={isExporting}
+            className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isExporting ? 'Exportando...' : 'Exportar Excel'}
+          </button>
+          <button
+            onClick={handleExportPDF}
+            disabled={isExporting}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isExporting ? 'Exportando...' : 'Exportar PDF'}
+          </button>
         </div>
       </div>
 

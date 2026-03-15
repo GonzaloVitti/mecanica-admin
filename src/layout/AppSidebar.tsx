@@ -14,6 +14,7 @@ import {
   UserCircleIcon,
   BoxIcon,
   CarLineIcon,
+  DollarLineIcon,
 } from "../icons/index";
 
 type NavItem = {
@@ -39,6 +40,12 @@ const navItems: NavItem[] = [
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
   },
   {
+    name: "Facturacion",
+    icon: <DollarLineIcon className="w-6 h-6" />,
+    path: '/arca',
+    allowedRoles: ['SUPER_ADMIN'],
+  },
+  {
     name: "Usuarios",
     icon: <UserCircleIcon />,
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
@@ -50,18 +57,11 @@ const navItems: NavItem[] = [
       { name: "Cuentas Corrientes", path: "/accounts", allowedRoles: ['MECHANIC', 'SUPER_ADMIN'] },
     ]
   },
-
   {
     name: "Repuestos",
     icon: <BoxIcon className="w-6 h-6" />,
     path: '/spare-parts',
     allowedRoles: ['MECHANIC', 'SUPER_ADMIN'],
-  },
-  {
-    name: "Facturacion",
-    icon: <PageIcon className="w-6 h-6" />,
-    path: '/arca',
-    allowedRoles: ['SUPER_ADMIN'],
   },
   {
     name: "Reportes",
@@ -340,15 +340,15 @@ const AppSidebar: React.FC = () => {
                 className="dark:hidden"
                 src="/images/logo/logo-mecanica.svg"
                 alt="Mecanica Logo"
-                width={150}
-                height={40}
+                width={185}
+                height={46}
               />
               <Image
                 className="hidden dark:block"
                 src="/images/logo/logo-mecanica-dark.svg"
                 alt="Mecanica Logo"
-                width={150}
-                height={40}
+                width={185}
+                height={46}
               />
             </>
           ) : (
@@ -357,15 +357,15 @@ const AppSidebar: React.FC = () => {
                 className="block dark:hidden"
                 src="/images/logo/logo-mecanica.svg"
                 alt="Mecanica Logo"
-                width={50}
-                height={50}
+                width={40}
+                height={40}
               />
               <Image
                 className="hidden dark:block"
                 src="/images/logo/logo-mecanica-dark.svg"
                 alt="Mecanica Logo"
-                width={50}
-                height={50}
+                width={40}
+                height={40}
               />
             </>
           )}

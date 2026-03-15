@@ -126,23 +126,21 @@ const CustomerDetail = () => {
             address: composed.address,
             is_active: composed.is_active,
           });
-          const text = `${composed.id}|${composed.email || ''}|${composed.phone || ''}`;
-          const enc = new TextEncoder().encode(text);
-          const digest = await crypto.subtle.digest('SHA-1', enc);
-          const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-          setPublicCode(hex.slice(0, 8));
-
-          // Buscar Customer model por email para obtener cuenta corriente
+          // Buscar Customer model por email para obtener cuenta corriente y public_code
           if (u.email) {
             try {
-              const custRes = await fetchApi<{ results: Array<{ id: string; account_id: string | null; account_balance: string }> }>(
+              const custRes = await fetchApi<{ results: Array<{ id: string; account_id: string | null; account_balance: string; public_code?: string }> }>(
                 `/api/customers/?email=${encodeURIComponent(u.email)}&limit=1`
               );
               const cust = custRes?.results?.[0];
-              if (cust?.account_id) {
-                setAccountInfo({ id: cust.account_id, balance: cust.account_balance || '0' });
-              } else if (cust) {
-                setAccountInfo({ id: '', balance: cust.account_balance || '0' });
+              if (cust) {
+                // Usar el public_code del backend (calculado con Customer UUID) para consistencia
+                if (cust.public_code) setPublicCode(cust.public_code);
+                if (cust.account_id) {
+                  setAccountInfo({ id: cust.account_id, balance: cust.account_balance || '0' });
+                } else {
+                  setAccountInfo({ id: '', balance: cust.account_balance || '0' });
+                }
               }
             } catch {}
           }

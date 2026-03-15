@@ -82,6 +82,15 @@ const AccountDetailPage = () => {
     }
   }
 
+  const refreshMovements = async () => {
+    try {
+      const acc = await fetchApi<Account>(`/api/customer-accounts/${id}/`)
+      if (acc) setAccount(acc)
+      const mv = await fetchApi<Movement[] | ApiResponse<Movement>>(`/api/customer-accounts/${id}/movements/`)
+      if (mv !== null) setMovements(Array.isArray(mv) ? mv : (mv?.results || []))
+    } catch (e) {}
+  }
+
   useEffect(() => {
     if (id) loadData()
   }, [id])
@@ -96,7 +105,7 @@ const AccountDetailPage = () => {
 
   const registerPaymentToAccount = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!account || !customer) return
+    if (!account) return
     const amount = Number(payAmount || '0')
     if (!amount || amount <= 0) {
       setAlert({ show: true, type: 'warning', title: 'Monto inválido', message: 'Ingresa un monto mayor a 0' })
@@ -104,20 +113,16 @@ const AccountDetailPage = () => {
     }
     try {
       setIsSubmitting(true)
-      await fetchApi<any>('/api/payments/', {
-        method: 'POST',
-        body: {
-          customer: customer.id,
-          work_order: null,
-          amount,
-          method: 'ACCOUNT',
-          status: 'COMPLETED',
-          notes: 'Pago a cuenta'
-        }
-      })
-      setAlert({ show: true, type: 'success', title: 'Pago registrado', message: 'Se imputó el pago a la cuenta corriente' })
+      const result = await fetchApi<{ balance: string; movements: Movement[] }>(
+        `/api/customer-accounts/${id}/pay/`,
+        { method: 'POST', body: { amount } }
+      )
+      if (result) {
+        setAccount(prev => prev ? { ...prev, balance: result.balance } : prev)
+        setMovements(result.movements)
+      }
       setPayAmount('')
-      await loadData()
+      setAlert({ show: true, type: 'success', title: 'Pago registrado', message: 'Se imputó el pago a la cuenta corriente' })
     } catch {
       setAlert({ show: true, type: 'error', title: 'Error', message: 'No se pudo registrar el pago' })
     } finally {

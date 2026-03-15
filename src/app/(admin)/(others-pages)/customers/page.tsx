@@ -42,6 +42,7 @@ interface Customer {
   has_user_account: boolean;
   created_at: string;
   updated_at: string;
+  public_code?: string;
 }
 
 // Respuesta paginada de la API
@@ -217,8 +218,16 @@ const CustomersPage = () => {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const response = await fetchApi<UsersApiResponse>('/api/users/customers/');
-      
+      const [response, custResponse] = await Promise.all([
+        fetchApi<UsersApiResponse>('/api/users/customers/'),
+        fetchApi<{ results: Array<{ email: string; public_code?: string }> }>('/api/customers/?limit=500'),
+      ]);
+
+      const codeMap = new Map<string, string>();
+      (custResponse?.results || []).forEach(c => {
+        if (c.email && c.public_code) codeMap.set(c.email, c.public_code);
+      });
+
       if (response) {
         const mapped = response.map((u) => ({
           id: String(u.id),
@@ -232,6 +241,7 @@ const CustomersPage = () => {
           has_user_account: true,
           created_at: u.date_joined,
           updated_at: u.date_joined,
+          public_code: codeMap.get(u.email) || '',
         }));
 
         setCustomers(mapped);
@@ -489,7 +499,7 @@ const CustomersPage = () => {
                     Teléfono
                   </TableCell>
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
-                    CUIT/DNI
+                    Cod. Público
                   </TableCell>
                   <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">
                     Estado
@@ -534,7 +544,7 @@ const CustomersPage = () => {
                       {customer.phone || customer.user?.phone_number || 'N/A'}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
-                      {customer.tax_id || 'N/A'}
+                      <span className="font-mono text-xs tracking-wider">{customer.public_code || '—'}</span>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">
                       <Badge

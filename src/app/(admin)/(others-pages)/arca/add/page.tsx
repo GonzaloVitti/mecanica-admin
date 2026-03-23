@@ -1,963 +1,417 @@
 'use client'
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Input from '@/components/form/input/InputField';
-import Label from '@/components/form/Label';
-import Link from 'next/link';
-import Alert from '@/components/ui/alert/Alert';
-import { fetchApi } from '@/app/lib/data';
+import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import Label from '@/components/form/Label'
+import Input from '@/components/form/input/InputField'
+import Alert from '@/components/ui/alert/Alert'
+import { fetchApi } from '@/app/lib/data'
 
-// Interfaces para el formulario de facturas AFIP
-interface Branch {
-  id: number;
-  name: string;
-  code: string;
-  address: string;
-  status: string;
-}
-
-interface AFIPConfiguration {
-  id: string;
-  branch: number;
-  cuit: string;
-  razon_social: string;
-  punto_venta: number;
-  is_active: boolean;
-  production_mode: boolean;
-  certificate_path: string;
-  private_key_path: string;
-}
-
-interface PurchaseOrder {
-  id: string;
-  order_number: string;
-  supplier: {
-    id: string;
-    name: string;
-    tax_id: string;
-  };
-  total: number;
-  status: string;
-}
-
-interface Sale {
-  id: string;
-  sale_number: string;
-  customer: {
-    id: string;
-    name: string;
-    tax_id: string;
-  } | null;
-  customer_name: string;
-  customer_tax_id: string;
-  total: number;
-  status: string;
-}
-
-interface WorkOrderItem {
-  id?: string;
-  item_type: 'LABOR' | 'PART';
-  product?: string | null;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  tax_rate: number;
+interface AFIPConfig {
+  id: string
+  cuit: string
+  razon_social: string
+  punto_venta: number
+  production_mode: boolean
+  is_active: boolean
 }
 
 interface WorkOrder {
-  id: string;
-  work_order_number: string;
-  customer_name: string;
-  customer_phone?: string;
-  items: WorkOrderItem[];
+  id: string
+  work_order_number: string
+  customer_name: string
+  customer_cuit?: string
+  items: Array<{
+    description: string
+    quantity: number
+    unit_price: number
+    tax_rate: number
+  }>
 }
 
-interface Product {
-  id: string;
-  name: string;
-  description: string;
-  retail_price: number;
-  category: {
-    id: string;
-    name: string;
-  };
+interface InvoiceItem {
+  descripcion: string
+  cantidad: string
+  precio_unitario: string
+  alicuota_iva: string
 }
 
-interface AFIPInvoiceFormData {
-  branch: string;
-  afip_config: string;
-  tipo_comprobante: string;
-  documento_tipo: string;
-  documento_numero: string;
-  razon_social: string;
-  purchase_order: string;
-  sale: string;
-  fecha_vencimiento: string;
-}
+const TIPO_COMPROBANTE = [
+  { value: '1',  label: 'Factura A' },
+  { value: '6',  label: 'Factura B' },
+  { value: '3',  label: 'Nota de Crédito A' },
+  { value: '8',  label: 'Nota de Crédito B' },
+  { value: '2',  label: 'Nota de Débito A' },
+  { value: '7',  label: 'Nota de Débito B' },
+]
 
-interface AFIPInvoiceItemFormData {
-  product: string;
-  descripcion: string;
-  cantidad: string;
-  precio_unitario: string;
-  alicuota_iva: string;
-}
+const ALICUOTAS = [
+  { value: '0',   label: '0% (Exento)' },
+  { value: '10.5', label: '10.5%' },
+  { value: '21',  label: '21%' },
+  { value: '27',  label: '27%' },
+]
 
-interface FormErrors {
-  branch?: string;
-  afip_config?: string;
-  tipo_comprobante?: string;
-  documento_tipo?: string;
-  documento_numero?: string;
-  razon_social?: string;
-  purchase_order?: string;
-  sale?: string;
-  fecha_vencimiento?: string;
-  items?: string;
-}
+const emptyItem = (): InvoiceItem => ({
+  descripcion: '', cantidad: '1', precio_unitario: '0', alicuota_iva: '21',
+})
 
-interface ItemErrors {
-  [key: number]: {
-    product?: string;
-    descripcion?: string;
-    cantidad?: string;
-    precio_unitario?: string;
-    alicuota_iva?: string;
-  };
-}
+export default function AddInvoicePage() {
+  const router = useRouter()
+  const [configs, setConfigs] = useState<AFIPConfig[]>([])
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([])
+  const [loadingConfigs, setLoadingConfigs] = useState(true)
 
-const AddAFIPInvoicePage = () => {
-  const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [alertMessage, setAlertMessage] = useState<string | null>(null);
-  const [alertType, setAlertType] = useState<'success' | 'error'>('error');
-  
-  // Estados para datos del formulario
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [afipConfigs, setAfipConfigs] = useState<AFIPConfiguration[]>([]);
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loadingBranches, setLoadingBranches] = useState(true);
-  const [loadingConfigs, setLoadingConfigs] = useState(false);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [loadingServices, setLoadingServices] = useState(false);
-  const [loadingProducts, setLoadingProducts] = useState(true);
-  const [selectedWorkOrder, setSelectedWorkOrder] = useState<string>('');
+  const [afipConfig, setAfipConfig] = useState('')
+  const [tipoComprobante, setTipoComprobante] = useState('6') // Factura B default
+  const [documentoTipo, setDocumentoTipo] = useState('80')   // CUIT default
+  const [documentoNumero, setDocumentoNumero] = useState('')
+  const [razonSocial, setRazonSocial] = useState('')
+  const [fechaVencimiento, setFechaVencimiento] = useState('')
+  const [items, setItems] = useState<InvoiceItem[]>([emptyItem()])
+  const [selectedWO, setSelectedWO] = useState('')
 
-  const [formData, setFormData] = useState<AFIPInvoiceFormData>({
-    branch: '',
-    afip_config: '',
-    tipo_comprobante: '1', // Factura A por defecto
-    documento_tipo: '80', // CUIT por defecto
-    documento_numero: '',
-    razon_social: '',
-    purchase_order: '',
-    sale: '',
-    fecha_vencimiento: ''
-  });
+  const [saving, setSaving] = useState(false)
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
-  const [items, setItems] = useState<AFIPInvoiceItemFormData[]>([{
-    product: '',
-    descripcion: '',
-    cantidad: '1',
-    precio_unitario: '0',
-    alicuota_iva: '21.00'
-  }]);
-
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [itemErrors, setItemErrors] = useState<ItemErrors>({});
-
-  // Opciones para los selects
-  const tipoComprobanteOptions = [
-    { value: '1', label: 'Factura A' },
-    { value: '6', label: 'Factura B' },
-    { value: '11', label: 'Factura C' },
-    { value: '3', label: 'Nota de Crédito A' },
-    { value: '8', label: 'Nota de Crédito B' },
-    { value: '13', label: 'Nota de Crédito C' },
-    { value: '2', label: 'Nota de Débito A' },
-    { value: '7', label: 'Nota de Débito B' },
-    { value: '12', label: 'Nota de Débito C' }
-  ];
-
-  const documentoTipoOptions = [
-    { value: '80', label: 'CUIT' },
-    { value: '86', label: 'CUIL' },
-    { value: '96', label: 'DNI' },
-    { value: '99', label: 'Sin identificar' }
-  ];
-
-  // Cargar datos iniciales
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        setLoadingBranches(true);
-        setLoadingProducts(true);
-        
-        const [branchesResponse, productsResponse] = await Promise.all([
-          fetchApi<{ results: Branch[] }>('/api/branches/'),
-          fetchApi<{ results: Product[] }>('/api/products/')
-        ]);
+    const load = async () => {
+      const [cfgRes, woRes] = await Promise.all([
+        fetchApi<{ results: AFIPConfig[] }>('/api/afip-configurations/?is_active=true'),
+        fetchApi<{ results: any[] }>('/api/work-orders/?status=COMPLETED&limit=200'),
+      ])
+      const cfgs = cfgRes?.results || []
+      setConfigs(cfgs)
+      if (cfgs.length === 1) setAfipConfig(cfgs[0].id)
 
-        if (branchesResponse) {
-          setBranches(branchesResponse.results.filter(branch => branch.status === 'active'));
-        }
-        
-        if (productsResponse) {
-          setProducts(productsResponse.results);
-        }
-      } catch (error) {
-        console.error('Error fetching initial data:', error);
-        setAlertMessage('Error al cargar los datos iniciales');
-        setAlertType('error');
-      } finally {
-        setLoadingBranches(false);
-        setLoadingProducts(false);
+      const wos: WorkOrder[] = (woRes?.results || []).map((wo: any) => ({
+        id: wo.id,
+        work_order_number: wo.work_order_number,
+        customer_name: wo.customer_name || '',
+        customer_cuit: wo.customer_cuit || wo.customer_tax_id || '',
+        items: (wo.items || []).map((it: any) => ({
+          description: it.description || '',
+          quantity: Number(it.quantity) || 1,
+          unit_price: Number(it.unit_price) || 0,
+          tax_rate: Number(it.tax_rate) || 21,
+        })),
+      }))
+      setWorkOrders(wos)
+      setLoadingConfigs(false)
+    }
+    load()
+  }, [])
+
+  const handleSelectWorkOrder = async (woId: string) => {
+    setSelectedWO(woId)
+    if (!woId) return
+    const wo = workOrders.find(w => w.id === woId)
+    if (wo) {
+      setRazonSocial(wo.customer_name || razonSocial)
+      if (wo.customer_cuit) {
+        setDocumentoNumero(wo.customer_cuit)
+        setDocumentoTipo('80')
       }
-    };
-
-    fetchInitialData();
-  }, []);
-
-  // Cargar configuraciones AFIP cuando se selecciona una sucursal
-  useEffect(() => {
-    if (formData.branch) {
-      const fetchAfipConfigs = async () => {
-        try {
-          setLoadingConfigs(true);
-          const response = await fetchApi<{ results: AFIPConfiguration[] }>(`/api/afip-configurations/?branch=${formData.branch}`);
-          if (response) {
-            setAfipConfigs(response.results.filter(config => config.is_active));
-          }
-        } catch (error) {
-          console.error('Error fetching AFIP configurations:', error);
-        } finally {
-          setLoadingConfigs(false);
-        }
-      };
-
-      fetchAfipConfigs();
-    } else {
-      setAfipConfigs([]);
+      // Fetch full WO to get items
+      const data = await fetchApi<any>(`/api/work-orders/${woId}/`)
+      if (data?.items?.length) {
+        setItems(data.items.map((it: any) => ({
+          descripcion: it.description || '',
+          cantidad: String(Number(it.quantity) || 1),
+          precio_unitario: String(Number(it.unit_price) || 0),
+          alicuota_iva: String(Number(it.tax_rate) || 21),
+        })))
+      }
     }
-  }, [formData.branch]);
+  }
 
-  // Cargar órdenes de compra y servicios cuando se selecciona una sucursal
-  useEffect(() => {
-    if (formData.branch) {
-      const fetchOrdersAndServices = async () => {
-        try {
-          setLoadingOrders(true);
-          setLoadingServices(true);
-          
-          const [ordersResponse, salesResponse] = await Promise.all([
-            fetchApi<{ results: PurchaseOrder[] }>(`/api/purchase-orders/?branch=${formData.branch}&status=COMPLETED`),
-            fetchApi<{ results: any[] }>(`/api/work-orders/?status=COMPLETED&limit=200`)
-          ]);
+  const updateItem = (i: number, field: keyof InvoiceItem, val: string) => {
+    setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
+  }
 
-          if (ordersResponse) {
-            setPurchaseOrders(ordersResponse.results);
-          }
-          
-          if (salesResponse) {
-            const list = (salesResponse.results || []).map((wo: any) => ({
-              id: wo.id,
-              work_order_number: wo.work_order_number,
-              customer_name: wo.customer_name,
-              items: []
-            })) as WorkOrder[];
-            setWorkOrders(list);
-          }
-        } catch (error) {
-          console.error('Error fetching orders and services:', error);
-        } finally {
-          setLoadingOrders(false);
-          setLoadingServices(false);
-        }
-      };
+  const total = items.reduce((sum, it) => {
+    const base = Number(it.cantidad) * Number(it.precio_unitario)
+    return sum + base + base * Number(it.alicuota_iva) / 100
+  }, 0)
 
-      fetchOrdersAndServices();
-    } else {
-      setPurchaseOrders([]);
-      setWorkOrders([]);
-      setSelectedWorkOrder('');
-    }
-  }, [formData.branch]);
+  const handleSubmit = async () => {
+    if (!afipConfig) { setAlert({ type: 'error', msg: 'Seleccioná una configuración AFIP' }); return }
+    if (!razonSocial.trim()) { setAlert({ type: 'error', msg: 'Ingresá la razón social del cliente' }); return }
+    if (documentoTipo !== '99' && !documentoNumero.trim()) { setAlert({ type: 'error', msg: 'Ingresá el número de documento' }); return }
+    if (items.some(it => !it.descripcion.trim())) { setAlert({ type: 'error', msg: 'Todos los ítems deben tener descripción' }); return }
 
-  const prefillFromWorkOrder = async (id: string) => {
-    if (!id) return;
+    setSaving(true)
     try {
-      const data = await fetchApi<any>(`/api/work-orders/${id}/`, { method: 'GET' });
-      if (!data) return;
-      setFormData(prev => ({
-        ...prev,
-        razon_social: data.customer_name || prev.razon_social,
-      }));
-      const mapped = (data.items || []).map((it: any) => ({
-        product: it.item_type === 'PART' ? (it.product || '') : '',
-        descripcion: it.description || '',
-        cantidad: String(Number(it.quantity || '0') || 1),
-        precio_unitario: String(Number(it.unit_price || '0') || 0),
-        alicuota_iva: String(Number(it.tax_rate || '0') || 0),
-      })) as AFIPInvoiceItemFormData[];
-      if (mapped.length > 0) setItems(mapped);
-    } catch {}
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-
-    // Limpiar errores cuando el usuario empiece a escribir
-    if (errors[name as keyof FormErrors]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: undefined
-      }));
-    }
-  };
-
-  const handleItemChange = (index: number, field: keyof AFIPInvoiceItemFormData, value: string) => {
-    const newItems = [...items];
-    newItems[index] = {
-      ...newItems[index],
-      [field]: value
-    };
-
-    // Si se selecciona un producto, auto-completar descripción y precio
-    if (field === 'product' && value) {
-      const selectedProduct = products.find(p => p.id === value);
-      if (selectedProduct) {
-        newItems[index].descripcion = selectedProduct.description || selectedProduct.name;
-        newItems[index].precio_unitario = selectedProduct.retail_price.toString();
+      const payload = {
+        afip_config: afipConfig,
+        tipo_comprobante: tipoComprobante,
+        documento_tipo: documentoTipo,
+        documento_numero: documentoTipo === '99' ? '0' : documentoNumero.replace(/-/g, ''),
+        razon_social: razonSocial.trim().toUpperCase(),
+        fecha_vencimiento: fechaVencimiento || null,
+        items: items.map(it => ({
+          descripcion: it.descripcion,
+          cantidad: Number(it.cantidad),
+          precio_unitario: Number(it.precio_unitario),
+          alicuota_iva: Number(it.alicuota_iva),
+        })),
       }
-    }
-
-    setItems(newItems);
-
-    // Limpiar errores del item
-    if (itemErrors[index]?.[field]) {
-      setItemErrors(prev => ({
-        ...prev,
-        [index]: {
-          ...prev[index],
-          [field]: undefined
-        }
-      }));
-    }
-  };
-
-  const addItem = () => {
-    setItems(prev => [...prev, {
-      product: '',
-      descripcion: '',
-      cantidad: '1',
-      precio_unitario: '0',
-      alicuota_iva: '21.00'
-    }]);
-  };
-
-  const removeItem = (index: number) => {
-    if (items.length > 1) {
-      setItems(prev => prev.filter((_, i) => i !== index));
-      setItemErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[index];
-        return newErrors;
-      });
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
-    const newItemErrors: ItemErrors = {};
-
-    // Validaciones del formulario principal
-    if (!formData.branch) newErrors.branch = 'La sucursal es requerida';
-    if (!formData.afip_config) newErrors.afip_config = 'La configuración AFIP es requerida';
-    if (!formData.tipo_comprobante) newErrors.tipo_comprobante = 'El tipo de comprobante es requerido';
-    if (!formData.documento_tipo) newErrors.documento_tipo = 'El tipo de documento es requerido';
-    if (!formData.documento_numero.trim()) newErrors.documento_numero = 'El número de documento es requerido';
-    if (!formData.razon_social.trim()) newErrors.razon_social = 'La razón social es requerida';
-    
-    // Validar que se especifique al menos una orden de compra o venta
-    if (!formData.purchase_order && !selectedWorkOrder) {
-      newErrors.purchase_order = 'Debe especificar al menos una orden de compra o un servicio';
-    }
-
-    // Validaciones de items
-    if (items.length === 0) {
-      newErrors.items = 'Debe agregar al menos un item';
-    } else {
-      items.forEach((item, index) => {
-        const itemError: any = {};
-        
-        if (!item.descripcion.trim()) itemError.descripcion = 'La descripción es requerida';
-        if (!item.cantidad || parseFloat(item.cantidad) <= 0) itemError.cantidad = 'La cantidad debe ser mayor a 0';
-        if (!item.precio_unitario || parseFloat(item.precio_unitario) <= 0) itemError.precio_unitario = 'El precio debe ser mayor a 0';
-        if (!item.alicuota_iva || parseFloat(item.alicuota_iva) < 0) itemError.alicuota_iva = 'La alícuota IVA debe ser válida';
-
-        if (Object.keys(itemError).length > 0) {
-          newItemErrors[index] = itemError;
-        }
-      });
-    }
-
-    setErrors(newErrors);
-    setItemErrors(newItemErrors);
-
-    return Object.keys(newErrors).length === 0 && Object.keys(newItemErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      setAlertMessage('Por favor, corrija los errores en el formulario');
-      setAlertType('error');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setAlertMessage(null);
-
-    try {
-      const submitData = {
-        ...formData,
-        items: items.map(item => ({
-          product: item.product || null,
-          descripcion: item.descripcion,
-          cantidad: parseFloat(item.cantidad),
-          precio_unitario: parseFloat(item.precio_unitario),
-          alicuota_iva: parseFloat(item.alicuota_iva)
-        }))
-      };
-
-      const response = await fetchApi('/api/afip-invoices/', {
-        method: 'POST',
-        body: submitData,
-      });
-
-      if (response) {
-        setAlertMessage('Factura AFIP creada exitosamente');
-        setAlertType('success');
-        
-        // Redirigir después de un breve delay
-        setTimeout(() => {
-          router.push('/arca');
-        }, 2000);
+      const res = await fetchApi<any>('/api/afip-invoices/', { method: 'POST', body: payload })
+      if (res?.id) {
+        router.push(`/arca/${res.id}`)
+      } else {
+        setAlert({ type: 'error', msg: 'Error al crear la factura' })
       }
-    } catch (error: any) {
-      console.error('Error creating AFIP invoice:', error);
-      setAlertMessage(error.message || 'Error al crear la factura AFIP');
-      setAlertType('error');
+    } catch (e: any) {
+      setAlert({ type: 'error', msg: e?.message || 'Error al guardar' })
     } finally {
-      setIsSubmitting(false);
+      setSaving(false)
     }
-  };
+  }
+
+  const activeConfig = configs.find(c => c.id === afipConfig)
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
+    <div className="p-6 max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <Link href="/arca" className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Nueva factura AFIP</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Se crea y autoriza contra ARCA en un solo paso</p>
+        </div>
+      </div>
+
+      {alert && (
+        <div className="mb-4">
+          <Alert variant={alert.type} title={alert.type === 'error' ? 'Error' : 'OK'} message={alert.msg} onClose={() => setAlert(null)} />
+        </div>
+      )}
+
+      <div className="space-y-5">
+
+        {/* Config AFIP */}
+        <div className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <h2 className="font-medium text-gray-900 dark:text-white mb-4">Configuración AFIP</h2>
+          {loadingConfigs ? (
+            <div className="h-10 bg-gray-100 dark:bg-gray-700 rounded-lg animate-pulse" />
+          ) : configs.length === 0 ? (
+            <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              No hay configuraciones AFIP activas. <Link href="/arca/config" className="underline font-medium">Configurar ahora</Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {configs.length > 1 && (
+                <div>
+                  <Label>Configuración <span className="text-red-500">*</span></Label>
+                  <select
+                    value={afipConfig}
+                    onChange={e => setAfipConfig(e.target.value)}
+                    className="w-full h-10 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">Seleccionar...</option>
+                    {configs.map(c => (
+                      <option key={c.id} value={c.id}>{c.razon_social} — CUIT {c.cuit} — Pto. Vta. {String(c.punto_venta).padStart(5,'0')}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {activeConfig && (
+                <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/40 rounded-lg px-4 py-2.5">
+                  <span className="font-medium text-gray-800 dark:text-gray-200">{activeConfig.razon_social}</span>
+                  <span>CUIT {activeConfig.cuit}</span>
+                  <span>Pto. Vta. {String(activeConfig.punto_venta).padStart(5,'0')}</span>
+                  {activeConfig.production_mode
+                    ? <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full">PRODUCCIÓN</span>
+                    : <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-full">Homologación</span>
+                  }
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Tipo comprobante */}
+        <div className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <h2 className="font-medium text-gray-900 dark:text-white mb-4">Tipo de comprobante</h2>
+          <div className="grid grid-cols-2 gap-2">
+            {['1','6'].map(v => {
+              const opt = TIPO_COMPROBANTE.find(t => t.value === v)!
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setTipoComprobante(v)}
+                  className={`py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                    tipoComprobante === v
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-3">
+            <select
+              value={tipoComprobante}
+              onChange={e => setTipoComprobante(e.target.value)}
+              className="w-full h-9 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              {TIPO_COMPROBANTE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <p className="mt-2 text-xs text-gray-400">Factura B para consumidores finales / monotributistas · Factura A para empresas Responsables Inscriptos</p>
+        </div>
+
+        {/* Datos del cliente */}
+        <div className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
+            <h2 className="font-medium text-gray-900 dark:text-white">Datos del receptor</h2>
+            {workOrders.length > 0 && (
+              <select
+                value={selectedWO}
+                onChange={e => handleSelectWorkOrder(e.target.value)}
+                className="text-xs h-8 px-2 border border-blue-300 dark:border-blue-700 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+              >
+                <option value="">Cargar desde servicio...</option>
+                {workOrders.map(wo => (
+                  <option key={wo.id} value={wo.id}>#{wo.work_order_number} — {wo.customer_name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <Label>Razón social / Nombre <span className="text-red-500">*</span></Label>
+            <Input
+              type="text"
+              value={razonSocial}
+              onChange={e => setRazonSocial(e.target.value)}
+              placeholder="GARCÍA JUAN CARLOS"
+            />
+            <p className="text-xs text-gray-400 mt-1">En mayúsculas tal como figura en AFIP</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                Nueva Factura AFIP
-              </h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-400">
-                Crear una nueva factura electrónica AFIP
+              <Label>Tipo de documento</Label>
+              <select
+                value={documentoTipo}
+                onChange={e => setDocumentoTipo(e.target.value)}
+                className="w-full h-10 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="80">CUIT</option>
+                <option value="86">CUIL</option>
+                <option value="96">DNI</option>
+                <option value="99">Sin identificar</option>
+              </select>
+            </div>
+            <div>
+              <Label>Número de documento {documentoTipo !== '99' && <span className="text-red-500">*</span>}</Label>
+              <Input
+                type="text"
+                value={documentoTipo === '99' ? '' : documentoNumero}
+                onChange={e => setDocumentoNumero(e.target.value)}
+                placeholder={documentoTipo === '80' ? '20123456789' : documentoTipo === '96' ? '12345678' : ''}
+                disabled={documentoTipo === '99'}
+              />
+            </div>
+          </div>
+
+        </div>
+
+        {/* Items */}
+        <div className="bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-medium text-gray-900 dark:text-white">Ítems / Conceptos</h2>
+            <button
+              type="button"
+              onClick={() => setItems(prev => [...prev, emptyItem()])}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/40"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Agregar ítem
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {items.map((it, i) => (
+              <div key={i} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Ítem {i + 1}</span>
+                  {items.length > 1 && (
+                    <button type="button" onClick={() => setItems(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <Input
+                    type="text"
+                    value={it.descripcion}
+                    onChange={e => updateItem(i, 'descripcion', e.target.value)}
+                    placeholder="Descripción del servicio o producto"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Cantidad</label>
+                    <Input type="number" value={it.cantidad} onChange={e => updateItem(i, 'cantidad', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Precio unit. (sin IVA)</label>
+                    <Input type="number" value={it.precio_unitario} onChange={e => updateItem(i, 'precio_unitario', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">IVA</label>
+                    <select
+                      value={it.alicuota_iva}
+                      onChange={e => updateItem(i, 'alicuota_iva', e.target.value)}
+                      className="w-full h-10 px-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      {ALICUOTAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="text-right text-xs text-gray-500 dark:text-gray-400">
+                  Subtotal: <span className="font-medium text-gray-800 dark:text-gray-200">
+                    ${(Number(it.cantidad) * Number(it.precio_unitario) * (1 + Number(it.alicuota_iva) / 100)).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+            <div className="text-right">
+              <p className="text-xs text-gray-400 mb-0.5">Total con IVA</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                ${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </p>
             </div>
-            <Link
-              href="/arca"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-            >
-              ← Volver
-            </Link>
           </div>
         </div>
 
-        {/* Alert */}
-        {alertMessage && (
-          <div className="mb-6">
-            <Alert
-              variant={alertType}
-              title={alertType === 'success' ? 'Éxito' : 'Error'}
-              message={alertMessage}
-              onClose={() => setAlertMessage(null)}
-            />
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Información General */}
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">
-              Información General
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Sucursal */}
-              <div>
-                <Label htmlFor="branch" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Sucursal *
-                </Label>
-                <select
-                  id="branch"
-                  name="branch"
-                  value={formData.branch}
-                  onChange={handleInputChange}
-                  disabled={loadingBranches}
-                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                    errors.branch ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  <option value="">Seleccionar sucursal...</option>
-                  {branches.map(branch => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name} - {branch.address}
-                    </option>
-                  ))}
-                </select>
-                {errors.branch && (
-                  <span className="text-xs text-red-500">{errors.branch}</span>
-                )}
-              </div>
-
-              {/* Configuración AFIP */}
-              <div>
-                <Label htmlFor="afip_config" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Configuración AFIP *
-                </Label>
-                <select
-                  id="afip_config"
-                  name="afip_config"
-                  value={formData.afip_config}
-                  onChange={handleInputChange}
-                  disabled={loadingConfigs || !formData.branch}
-                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                    errors.afip_config ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  <option value="">Seleccionar configuración...</option>
-                  {afipConfigs.map(config => (
-                    <option key={config.id} value={config.id}>
-                      {config.razon_social} - CUIT: {config.cuit} - PV: {config.punto_venta}
-                    </option>
-                  ))}
-                </select>
-                {errors.afip_config && (
-                  <span className="text-xs text-red-500">{errors.afip_config}</span>
-                )}
-              </div>
-
-              {/* Tipo de Comprobante */}
-              <div>
-                <Label htmlFor="tipo_comprobante" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Tipo de Comprobante *
-                </Label>
-                <select
-                  id="tipo_comprobante"
-                  name="tipo_comprobante"
-                  value={formData.tipo_comprobante}
-                  onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                    errors.tipo_comprobante ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  {tipoComprobanteOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.tipo_comprobante && (
-                  <span className="text-xs text-red-500">{errors.tipo_comprobante}</span>
-                )}
-              </div>
-
-              {/* Fecha de Vencimiento */}
-              <div>
-                <Label htmlFor="fecha_vencimiento" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Fecha de Vencimiento
-                </Label>
-                <Input
-                  type="date"
-                  id="fecha_vencimiento"
-                  name="fecha_vencimiento"
-                  value={formData.fecha_vencimiento}
-                  onChange={handleInputChange}
-                  error={!!errors.fecha_vencimiento}
-                />
-                {errors.fecha_vencimiento && (
-                  <span className="text-xs text-red-500">{errors.fecha_vencimiento}</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Información del Cliente/Receptor */}
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">
-              Información del Cliente/Receptor
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Tipo de Documento */}
-              <div>
-                <Label htmlFor="documento_tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Tipo de Documento *
-                </Label>
-                <select
-                  id="documento_tipo"
-                  name="documento_tipo"
-                  value={formData.documento_tipo}
-                  onChange={handleInputChange}
-                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                    errors.documento_tipo ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  {documentoTipoOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.documento_tipo && (
-                  <span className="text-xs text-red-500">{errors.documento_tipo}</span>
-                )}
-              </div>
-
-              {/* Número de Documento */}
-              <div>
-                <Label htmlFor="documento_numero" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Número de Documento *
-                </Label>
-                <Input
-                  type="text"
-                  id="documento_numero"
-                  name="documento_numero"
-                  value={formData.documento_numero}
-                  onChange={handleInputChange}
-                  placeholder="Ej: 20123456789"
-                  error={!!errors.documento_numero}
-                />
-                {errors.documento_numero && (
-                  <span className="text-xs text-red-500">{errors.documento_numero}</span>
-                )}
-              </div>
-
-              {/* Razón Social */}
-              <div>
-                <Label htmlFor="razon_social" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Razón Social *
-                </Label>
-                <Input
-                  type="text"
-                  id="razon_social"
-                  name="razon_social"
-                  value={formData.razon_social}
-                  onChange={handleInputChange}
-                  placeholder="Nombre o razón social del cliente"
-                  error={!!errors.razon_social}
-                />
-                {errors.razon_social && (
-                  <span className="text-xs text-red-500">{errors.razon_social}</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Origen de la Factura */}
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">
-              Origen de la Factura
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Orden de Compra */}
-              <div>
-                <Label htmlFor="purchase_order" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Orden de Compra
-                </Label>
-                <select
-                  id="purchase_order"
-                  name="purchase_order"
-                  value={formData.purchase_order}
-                  onChange={handleInputChange}
-                  disabled={loadingOrders || !formData.branch}
-                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                    errors.purchase_order ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  <option value="">Seleccionar orden de compra...</option>
-                  {purchaseOrders.map(order => (
-                    <option key={order.id} value={order.id}>
-                      {order.order_number} - {order.supplier.name} - ${order.total}
-                    </option>
-                  ))}
-                </select>
-                {errors.purchase_order && (
-                  <span className="text-xs text-red-500">{errors.purchase_order}</span>
-                )}
-              </div>
-
-              {/* Servicio */}
-              <div>
-                <Label htmlFor="work_order" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Servicio
-                </Label>
-                <select
-                  id="work_order"
-                  name="work_order"
-                  value={selectedWorkOrder}
-                  onChange={(e) => { setSelectedWorkOrder(e.target.value); prefillFromWorkOrder(e.target.value); }}
-                  disabled={loadingServices || !formData.branch}
-                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                    errors.purchase_order ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                >
-                  <option value="">Seleccionar servicio...</option>
-                  {workOrders.map(wo => (
-                    <option key={wo.id} value={wo.id}>
-                      {wo.work_order_number} - {wo.customer_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-              <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>Nota:</strong> Puede seleccionar una orden de compra o un servicio como origen. Al elegir un servicio, se precargan los ítems del presupuesto.
-              </p>
-            </div>
-          </div>
-
-          {/* Items de la Factura */}
-          <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-                Items de la Factura
-              </h2>
-              <button
-                type="button"
-                onClick={addItem}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              >
-                + Agregar Item
-              </button>
-            </div>
-
-            {errors.items && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                <span className="text-sm text-red-600 dark:text-red-400">{errors.items}</span>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              {items.map((item, index) => (
-                <div key={index} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                      Item #{index + 1}
-                    </h3>
-                    {items.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeItem(index)}
-                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm"
-                      >
-                        Eliminar
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {/* Producto */}
-                    <div>
-                      <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Producto
-                      </Label>
-                      <select
-                        value={item.product}
-                        onChange={(e) => handleItemChange(index, 'product', e.target.value)}
-                        disabled={loadingProducts}
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                          itemErrors[index]?.product ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                        }`}
-                      >
-                        <option value="">Seleccionar producto...</option>
-                        {products.map(product => (
-                          <option key={product.id} value={product.id}>
-                            {product.name}
-                          </option>
-                        ))}
-                      </select>
-                      {itemErrors[index]?.product && (
-                        <span className="text-xs text-red-500">{itemErrors[index].product}</span>
-                      )}
-                    </div>
-
-                    {/* Descripción */}
-                    <div>
-                      <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Descripción *
-                      </Label>
-                      <Input
-                        type="text"
-                        value={item.descripcion}
-                        onChange={(e) => handleItemChange(index, 'descripcion', e.target.value)}
-                        placeholder="Descripción del item"
-                        error={!!itemErrors[index]?.descripcion}
-                      />
-                      {itemErrors[index]?.descripcion && (
-                        <span className="text-xs text-red-500">{itemErrors[index].descripcion}</span>
-                      )}
-                    </div>
-
-                    {/* Cantidad */}
-                    <div>
-                      <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Cantidad *
-                      </Label>
-                      <Input
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        value={item.cantidad}
-                        onChange={(e) => handleItemChange(index, 'cantidad', e.target.value)}
-                        placeholder="1"
-                        error={!!itemErrors[index]?.cantidad}
-                      />
-                      {itemErrors[index]?.cantidad && (
-                        <span className="text-xs text-red-500">{itemErrors[index].cantidad}</span>
-                      )}
-                    </div>
-
-                    {/* Precio Unitario */}
-                    <div>
-                      <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Precio Unitario *
-                      </Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={item.precio_unitario}
-                        onChange={(e) => handleItemChange(index, 'precio_unitario', e.target.value)}
-                        placeholder="0.00"
-                        error={!!itemErrors[index]?.precio_unitario}
-                      />
-                      {itemErrors[index]?.precio_unitario && (
-                        <span className="text-xs text-red-500">{itemErrors[index].precio_unitario}</span>
-                      )}
-                    </div>
-
-                    {/* Alícuota IVA */}
-                    <div>
-                      <Label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        IVA (%) *
-                      </Label>
-                      <select
-                        value={item.alicuota_iva}
-                        onChange={(e) => handleItemChange(index, 'alicuota_iva', e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
-                          itemErrors[index]?.alicuota_iva ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                        }`}
-                      >
-                        <option value="0">0%</option>
-                        <option value="10.5">10.5%</option>
-                        <option value="21">21%</option>
-                        <option value="27">27%</option>
-                      </select>
-                      {itemErrors[index]?.alicuota_iva && (
-                        <span className="text-xs text-red-500">{itemErrors[index].alicuota_iva}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Totales del item */}
-                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                          ${(parseFloat(item.cantidad || '0') * parseFloat(item.precio_unitario || '0')).toFixed(2)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600 dark:text-gray-400">IVA:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                          ${((parseFloat(item.cantidad || '0') * parseFloat(item.precio_unitario || '0')) * (parseFloat(item.alicuota_iva || '0') / 100)).toFixed(2)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600 dark:text-gray-400">Total:</span>
-                        <span className="ml-2 font-medium text-gray-900 dark:text-white">
-                          ${((parseFloat(item.cantidad || '0') * parseFloat(item.precio_unitario || '0')) * (1 + parseFloat(item.alicuota_iva || '0') / 100)).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Total General */}
-            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-medium text-gray-900 dark:text-white">
-                  Total General:
-                </span>
-                <span className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                  ${items.reduce((total, item) => {
-                    const subtotal = parseFloat(item.cantidad || '0') * parseFloat(item.precio_unitario || '0');
-                    const iva = subtotal * (parseFloat(item.alicuota_iva || '0') / 100);
-                    return total + subtotal + iva;
-                  }, 0).toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Botones de Acción */}
-          <div className="flex items-center justify-end space-x-4 pt-6">
-            <Link
-              href="/arca"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-            >
-              Cancelar
-            </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isSubmitting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Creando...
-                </>
-              ) : (
-                'Crear Factura AFIP'
-              )}
-            </button>
-          </div>
-        </form>
+        {/* Acciones */}
+        <div className="flex items-center justify-end gap-3 pb-8">
+          <Link href="/arca" className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600">
+            Cancelar
+          </Link>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving || configs.length === 0}
+            className="inline-flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {saving ? 'Enviando a AFIP...' : 'Crear y autorizar factura'}
+          </button>
+        </div>
       </div>
     </div>
-  );
-};
-
-export default AddAFIPInvoicePage;
+  )
+}

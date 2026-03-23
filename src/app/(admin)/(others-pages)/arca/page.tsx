@@ -271,15 +271,15 @@ const AFIPInvoicesPage = () => {
 
   // Función para obtener el color del badge según el estado
   const getStatusBadgeColor = (status: string): "success" | "error" | "warning" | "info" | "light" => {
-    switch (status) {
-      case 'AUTORIZADA':
+    switch (status.toLowerCase()) {
+      case 'approved': case 'autorizada':
         return 'success';
-      case 'RECHAZADA':
-      case 'ANULADA':
+      case 'rejected': case 'rechazada':
+      case 'cancelled': case 'anulada':
         return 'error';
-      case 'PENDIENTE':
+      case 'pending': case 'pendiente':
         return 'warning';
-      case 'BORRADOR':
+      case 'draft': case 'borrador':
         return 'info';
       default:
         return 'light';
@@ -289,13 +289,13 @@ const AFIPInvoicesPage = () => {
   // Función para obtener el texto del estado
   const getStatusText = (status: string): string => {
     const statusMap: { [key: string]: string } = {
-      'BORRADOR': 'Borrador',
-      'PENDIENTE': 'Pendiente',
-      'AUTORIZADA': 'Autorizada',
-      'RECHAZADA': 'Rechazada',
-      'ANULADA': 'Anulada'
+      'draft': 'Borrador', 'borrador': 'Borrador',
+      'pending': 'Pendiente', 'pendiente': 'Pendiente',
+      'approved': 'Aprobada', 'autorizada': 'Aprobada',
+      'rejected': 'Rechazada', 'rechazada': 'Rechazada',
+      'cancelled': 'Anulada', 'anulada': 'Anulada',
     };
-    return statusMap[status] || status;
+    return statusMap[status.toLowerCase()] || status;
   };
 
   // Función para obtener el texto del tipo de comprobante
@@ -367,6 +367,14 @@ const AFIPInvoicesPage = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
+            <Link href="/arca/config">
+              <Button variant="outline">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Configuración AFIP
+              </Button>
+            </Link>
             <Link href="/arca/add">
               <Button variant="primary">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -581,25 +589,26 @@ const AFIPInvoicesPage = () => {
                           </Button>
                         )}
 
-                        {invoice.estado === 'AUTORIZADA' && (
+                        {(invoice.estado === 'approved' || invoice.estado === 'AUTORIZADA') && (
                           <Button
                             size="sm"
-                            variant="warning"
-                            onClick={() => {
-                              setConfirmModal({
-                                isOpen: true,
-                                title: 'Anular Factura',
-                                message: '¿Estás seguro de que deseas anular esta factura?',
-                                onConfirm: () => {
-                                  cancelInvoice(invoice.id);
-                                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                                }
-                              });
+                            variant="outline"
+                            onClick={async () => {
+                              const token = localStorage.getItem('token')
+                              const url = `${process.env.NEXT_PUBLIC_API_URL}/api/afip-invoices/${invoice.id}/pdf/`
+                              const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+                              if (res.ok) {
+                                const blob = await res.blob()
+                                const blobUrl = URL.createObjectURL(blob)
+                                window.open(blobUrl, '_blank')
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+                              }
                             }}
                           >
-                            Anular
+                            PDF
                           </Button>
                         )}
+
 
                         {(invoice.estado === 'BORRADOR' || invoice.estado === 'RECHAZADA') && (
                           <Button
@@ -686,23 +695,27 @@ const AFIPInvoicesPage = () => {
                         </Button>
                         
                         {/* Números de página */}
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          const pageNumber = Math.max(1, Math.min(currentPage - 2 + i, totalPages - 4 + i));
-                          return (
-                            <Button
-                              key={pageNumber}
-                              variant={currentPage === pageNumber ? "primary" : "outline"}
-                              size="sm"
-                              onClick={() => {
-                                setCurrentPage(pageNumber);
-                                fetchInvoices(pageNumber, searchTerm, statusFilter, typeFilter);
-                              }}
-                              className="rounded-none"
-                            >
-                              {pageNumber}
-                            </Button>
-                          );
-                        })}
+                        {(() => {
+                          const maxPages = 5;
+                          const half = Math.floor(maxPages / 2);
+                          let start = Math.max(1, currentPage - half);
+                          let end = Math.min(totalPages, start + maxPages - 1);
+                          if (end - start + 1 < maxPages) start = Math.max(1, end - maxPages + 1);
+                          return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+                        })().map(pageNumber => (
+                          <Button
+                            key={pageNumber}
+                            variant={currentPage === pageNumber ? "primary" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              setCurrentPage(pageNumber);
+                              fetchInvoices(pageNumber, searchTerm, statusFilter, typeFilter);
+                            }}
+                            className="rounded-none"
+                          >
+                            {pageNumber}
+                          </Button>
+                        ))}
 
                         <Button
                           variant="outline"

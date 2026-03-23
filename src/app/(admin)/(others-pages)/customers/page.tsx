@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState, useRef, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Table,
   TableBody,
@@ -191,6 +192,236 @@ const CustomerAvatar = ({ customer }: { customer: Customer }) => {
   );
 };
 
+interface ImportRow { name: string; tax_id: string }
+interface ImportResult { name: string; status: 'ok' | 'error'; message?: string }
+
+const BulkImportModal = ({
+  isOpen,
+  onClose,
+  onDone,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onDone: () => void
+}) => {
+  const [rows, setRows] = useState<ImportRow[]>([])
+  const [fileName, setFileName] = useState('')
+  const [results, setResults] = useState<ImportResult[]>([])
+  const [importing, setImporting] = useState(false)
+  const [done, setDone] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const reset = () => {
+    setRows([])
+    setFileName('')
+    setResults([])
+    setImporting(false)
+    setDone(false)
+  }
+
+  const handleClose = () => {
+    if (importing) return
+    reset()
+    onClose()
+  }
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileName(file.name)
+    setResults([])
+    setDone(false)
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target?.result, { type: 'array' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+        const parsed: ImportRow[] = raw
+          .slice(1) // skip header row
+          .filter(r => r[0] && String(r[0]).trim())
+          .map(r => ({
+            name: String(r[0] || '').trim(),
+            tax_id: String(r[1] || '').trim(),
+          }))
+        setRows(parsed)
+      } catch {
+        setRows([])
+        setFileName('Error al leer el archivo')
+      }
+    }
+    reader.readAsArrayBuffer(file)
+  }
+
+  const handleImport = async () => {
+    if (!rows.length || importing) return
+    setImporting(true)
+    setResults([])
+    const res: ImportResult[] = []
+    for (const row of rows) {
+      try {
+        const created = await fetchApi<any>('/api/customers/', {
+          method: 'POST',
+          body: { name: row.name, tax_id: row.tax_id },
+        })
+        if (created && created.id) {
+          res.push({ name: row.name, status: 'ok' })
+        } else {
+          res.push({ name: row.name, status: 'error', message: 'Sin respuesta del servidor' })
+        }
+      } catch (err: any) {
+        res.push({ name: row.name, status: 'error', message: err?.message || 'Error desconocido' })
+      }
+      setResults([...res])
+    }
+    setImporting(false)
+    setDone(true)
+    onDone()
+  }
+
+  const okCount = results.filter(r => r.status === 'ok').length
+  const errCount = results.filter(r => r.status === 'error').length
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-xl mx-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Importar clientes desde Excel</h3>
+          <button onClick={handleClose} disabled={importing} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
+          {/* Format hint */}
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-700 dark:text-blue-300">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-medium mb-1">Formato del archivo Excel:</p>
+                <p>Columna A: <strong>Razón Social / Nombre</strong></p>
+                <p>Columna B: <strong>CUIT</strong> (opcional)</p>
+                <p className="mt-1 text-xs text-blue-500">La primera fila se ignora (encabezados). Formatos aceptados: .xlsx, .xls, .csv</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const ws = XLSX.utils.aoa_to_sheet([
+                    ['Razón Social', 'CUIT'],
+                    ['Taller García S.R.L.', '30712345678'],
+                    ['López Juan Carlos', '20201234567'],
+                    ['Distribuidora Norte', ''],
+                  ])
+                  ws['!cols'] = [{ wch: 35 }, { wch: 15 }]
+                  const wb = XLSX.utils.book_new()
+                  XLSX.utils.book_append_sheet(wb, ws, 'Clientes')
+                  XLSX.writeFile(wb, 'plantilla_clientes.xlsx')
+                }}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Plantilla
+              </button>
+            </div>
+          </div>
+
+          {/* File input */}
+          <div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFile}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={importing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              {fileName || 'Seleccionar archivo Excel'}
+            </button>
+          </div>
+
+          {/* Preview */}
+          {rows.length > 0 && !done && (
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{rows.length} clientes encontrados. Vista previa:</p>
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400">Razón Social</th>
+                      <th className="px-3 py-2 text-left text-xs text-gray-500 dark:text-gray-400">CUIT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {rows.slice(0, 20).map((r, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-1.5 text-gray-800 dark:text-gray-200">{r.name}</td>
+                        <td className="px-3 py-1.5 text-gray-500 dark:text-gray-400 font-mono text-xs">{r.tax_id || '—'}</td>
+                      </tr>
+                    ))}
+                    {rows.length > 20 && (
+                      <tr><td colSpan={2} className="px-3 py-1.5 text-gray-400 text-xs">... y {rows.length - 20} más</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Progress / Results */}
+          {results.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                {importing && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {importing ? `Importando... ${results.length}/${rows.length}` : `Finalizado — ${okCount} creados, ${errCount} errores`}
+                </span>
+              </div>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
+                {results.map((r, i) => (
+                  <div key={i} className={`flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 last:border-0 ${r.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
+                    {r.status === 'ok'
+                      ? <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      : <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    }
+                    <span className={r.status === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}>{r.name}</span>
+                    {r.message && <span className="text-xs text-red-500 ml-auto">{r.message}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <button onClick={handleClose} disabled={importing} className="px-4 py-2 text-sm text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50">
+            {done ? 'Cerrar' : 'Cancelar'}
+          </button>
+          {!done && (
+            <button
+              onClick={handleImport}
+              disabled={!rows.length || importing}
+              className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {importing && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+              {importing ? 'Importando...' : `Importar ${rows.length ? `${rows.length} clientes` : ''}`}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const CustomersPage = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,6 +440,7 @@ const CustomersPage = () => {
   const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
   const [prevPageUrl, setPrevPageUrl] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const { user } = useStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -434,25 +666,26 @@ const CustomersPage = () => {
           Clientes {totalCount > 0 && `(${totalCount})`}
         </h1>
         {isSuperAdmin && (
-          <Link
-            href="/customers/add"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            <svg
-              className="w-4 h-4 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Agregar Cliente
-          </Link>
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Importar Excel
+            </button>
+            <Link
+              href="/customers/add"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Agregar Cliente
+            </Link>
+          </div>
         )}
       </div>
 
@@ -642,6 +875,13 @@ const CustomersPage = () => {
             ? `¿Está seguro de que desea eliminar completamente al cliente "${customerToDelete?.name}" y su cuenta de usuario?. Esta acción no se puede deshacer.`
             : `¿Está seguro de que desea eliminar al cliente "${customerToDelete?.name}"? Esta acción no se puede deshacer.`
         }
+      />
+
+      {/* Modal importación masiva */}
+      <BulkImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onDone={() => fetchCustomers()}
       />
     </div>
   );

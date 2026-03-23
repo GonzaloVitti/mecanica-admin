@@ -5,7 +5,6 @@ import Link from 'next/link'
 import Alert from '@/components/ui/alert/Alert'
 import Label from '@/components/form/Label'
 import Input from '@/components/form/input/InputField'
-import FileInput from '@/components/form/input/FileInput'
 import Select from '@/components/form/Select'
 import CommonMultiSelect from '@/components/common/MultiSelect'
 import Button from '@/components/ui/button/Button'
@@ -59,12 +58,10 @@ const AddServicePage = () => {
     return local.toISOString().slice(0, 10)
   })
 
-  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
-  const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string; email: string; address: string; tax_id: string}>({ name: '', phone: '', email: '', address: '', tax_id: '' })
-  const [newCustomerImage, setNewCustomerImage] = useState<File | null>(null)
-  const [isCreatingVehicle, setIsCreatingVehicle] = useState(false)
-  const [newVehicle, setNewVehicle] = useState<{ license_plate: string; brand: string; model: string; year: string; color: string; mileage?: string }>({ license_plate: '', brand: '', model: '', year: '', color: '', mileage: '' })
-  const [newVehicleImage, setNewVehicleImage] = useState<File | null>(null)
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(true)
+  const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string; email: string; address: string; tax_id: string }>({ name: '', phone: '', email: '', address: '', tax_id: '' })
+  const [isCreatingVehicle, setIsCreatingVehicle] = useState(true)
+  const [newVehicle, setNewVehicle] = useState<{ license_plate: string; brand: string; model: string; mileage?: string }>({ license_plate: '', brand: '', model: '', mileage: '' })
 
   const showAlert = (type: AlertState['type'], title: string, message: string) => {
     setAlert({ show: true, type, title, message })
@@ -154,20 +151,7 @@ const AddServicePage = () => {
     // Crear cliente si se seleccionó crear uno nuevo
     try {
       if (isCreatingCustomer && !customerId) {
-        let created: any = null
-        if (newCustomerImage) {
-          const form = new FormData()
-          form.append('name', newCustomer.name)
-          form.append('phone', newCustomer.phone)
-          form.append('email', newCustomer.email || '')
-          form.append('address', newCustomer.address)
-          form.append('tax_id', newCustomer.tax_id)
-          form.append('image', newCustomerImage)
-          created = await fetchApi('/api/customers/', { method: 'POST', body: form as any, isFormData: true })
-        } else {
-          const payloadCustomer = { ...newCustomer }
-          created = await fetchApi('/api/customers/', { method: 'POST', body: payloadCustomer })
-        }
+        const created = await fetchApi<any>('/api/customers/', { method: 'POST', body: { ...newCustomer } })
         if (!created || !created.id) throw new Error('No se pudo crear el cliente')
         setCustomers(prev => [{ id: created.id, name: created.name, phone: created.phone }, ...prev])
         setCustomerId(created.id)
@@ -180,23 +164,7 @@ const AddServicePage = () => {
     try {
       if (isCreatingVehicle && !vehicleId) {
         if (!customerId) { showAlert('error', 'Error', 'Primero selecciona o crea un cliente'); return }
-        let createdV: any = null
-        if (newVehicleImage) {
-          const formV = new FormData()
-          formV.append('license_plate', newVehicle.license_plate)
-          formV.append('brand', newVehicle.brand)
-          formV.append('model', newVehicle.model)
-          formV.append('year', newVehicle.year)
-          formV.append('color', newVehicle.color)
-          if (newVehicle.mileage) formV.append('mileage', newVehicle.mileage)
-          formV.append('owner', customerId)
-          formV.append('image', newVehicleImage)
-          createdV = await fetchApi('/api/vehicles/', { method: 'POST', body: formV as any, isFormData: true })
-        } else {
-          const payloadVehicle: any = { ...newVehicle }
-          payloadVehicle.owner = customerId
-          createdV = await fetchApi('/api/vehicles/', { method: 'POST', body: payloadVehicle })
-        }
+        const createdV = await fetchApi<any>('/api/vehicles/', { method: 'POST', body: { ...newVehicle, owner: customerId } })
         if (!createdV || !createdV.id) throw new Error('No se pudo crear el vehículo')
         setVehicles(prev => [{ id: createdV.id, license_plate: createdV.license_plate, brand: createdV.brand, model: createdV.model, year: createdV.year }, ...prev])
         setVehicleId(createdV.id)
@@ -257,29 +225,25 @@ const AddServicePage = () => {
               <Select options={customerOptions} value={customerId} onChange={setCustomerId} placeholder="Selecciona un cliente" />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-gray-200 dark:border-gray-700 rounded-md p-3">
-                <div>
-                  <Label>Nombre</Label>
-                  <Input type="text" name="cust_name" value={newCustomer.name} onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))} placeholder="Nombre y apellido" />
+                <div className="md:col-span-2">
+                  <Label>Nombre <span className="text-red-500">*</span></Label>
+                  <Input type="text" name="cust_name" value={newCustomer.name} onChange={(e) => setNewCustomer(prev => ({ ...prev, name: e.target.value }))} placeholder="Nombre y apellido o razón social" />
                 </div>
                 <div>
-                  <Label>Teléfono</Label>
+                  <Label>Teléfono <span className="text-gray-400 text-xs">(opcional)</span></Label>
                   <Input type="tel" name="cust_phone" value={newCustomer.phone} onChange={(e) => setNewCustomer(prev => ({ ...prev, phone: e.target.value }))} placeholder="" />
                 </div>
                 <div>
-                  <Label>Email (opcional)</Label>
+                  <Label>CUIT <span className="text-gray-400 text-xs">(opcional)</span></Label>
+                  <Input type="text" name="cust_cuit" value={newCustomer.tax_id} onChange={(e) => setNewCustomer(prev => ({ ...prev, tax_id: e.target.value }))} placeholder="" />
+                </div>
+                <div>
+                  <Label>Email <span className="text-gray-400 text-xs">(opcional)</span></Label>
                   <Input type="email" name="cust_email" value={newCustomer.email} onChange={(e) => setNewCustomer(prev => ({ ...prev, email: e.target.value }))} placeholder="" />
                 </div>
                 <div>
-                  <Label>CUIT (opcional)</Label>
-                  <Input type="text" name="cust_cuit" value={newCustomer.tax_id} onChange={(e) => setNewCustomer(prev => ({ ...prev, tax_id: e.target.value }))} placeholder="" />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Dirección (opcional)</Label>
+                  <Label>Dirección <span className="text-gray-400 text-xs">(opcional)</span></Label>
                   <Input type="text" name="cust_addr" value={newCustomer.address} onChange={(e) => setNewCustomer(prev => ({ ...prev, address: e.target.value }))} placeholder="" />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Imagen del cliente (opcional)</Label>
-                  <FileInput accept="image/*" onChange={(e) => setNewCustomerImage(e.target.files?.[0] || null)} />
                 </div>
               </div>
             )}
@@ -292,35 +256,23 @@ const AddServicePage = () => {
           {!isCreatingVehicle ? (
             <Select options={vehicleOptions} value={vehicleId} onChange={setVehicleId} placeholder="Selecciona un vehículo" />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-gray-200 dark:border-gray-700 rounded-md p-3">
-                <div>
-                  <Label>Patente</Label>
-                  <Input type="text" name="veh_plate" value={newVehicle.license_plate} onChange={(e) => setNewVehicle(prev => ({ ...prev, license_plate: e.target.value }))} placeholder="AB123CD" />
-                </div>
-                <div>
-                  <Label>Marca</Label>
-                  <Input type="text" name="veh_brand" value={newVehicle.brand} onChange={(e) => setNewVehicle(prev => ({ ...prev, brand: e.target.value }))} placeholder="" />
-                </div>
-                <div>
-                  <Label>Modelo</Label>
-                  <Input type="text" name="veh_model" value={newVehicle.model} onChange={(e) => setNewVehicle(prev => ({ ...prev, model: e.target.value }))} placeholder="" />
-                </div>
-                <div>
-                  <Label>Año (opcional)</Label>
-                  <Input type="text" name="veh_year" value={newVehicle.year} onChange={(e) => setNewVehicle(prev => ({ ...prev, year: e.target.value }))} placeholder="" />
-                </div>
-                <div>
-                  <Label>Color (opcional)</Label>
-                  <Input type="text" name="veh_color" value={newVehicle.color} onChange={(e) => setNewVehicle(prev => ({ ...prev, color: e.target.value }))} placeholder="" />
-                </div>
-                <div>
-                  <Label>Kilometraje (opcional)</Label>
-                  <Input type="number" name="veh_mileage" value={newVehicle.mileage || ''} onChange={(e) => setNewVehicle(prev => ({ ...prev, mileage: e.target.value }))} placeholder="Ej: 125000" />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Imagen del vehículo (opcional)</Label>
-                  <FileInput accept="image/*" onChange={(e) => setNewVehicleImage(e.target.files?.[0] || null)} />
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border border-gray-200 dark:border-gray-700 rounded-md p-3">
+              <div>
+                <Label>Patente <span className="text-red-500">*</span></Label>
+                <Input type="text" name="veh_plate" value={newVehicle.license_plate} onChange={(e) => setNewVehicle(prev => ({ ...prev, license_plate: e.target.value }))} placeholder="AB123CD" />
+              </div>
+              <div>
+                <Label>Marca <span className="text-red-500">*</span></Label>
+                <Input type="text" name="veh_brand" value={newVehicle.brand} onChange={(e) => setNewVehicle(prev => ({ ...prev, brand: e.target.value }))} placeholder="Ford, Toyota..." />
+              </div>
+              <div>
+                <Label>Modelo <span className="text-red-500">*</span></Label>
+                <Input type="text" name="veh_model" value={newVehicle.model} onChange={(e) => setNewVehicle(prev => ({ ...prev, model: e.target.value }))} placeholder="Focus, Corolla..." />
+              </div>
+              <div>
+                <Label>Kilometraje <span className="text-gray-400 text-xs">(opcional)</span></Label>
+                <Input type="number" name="veh_mileage" value={newVehicle.mileage || ''} onChange={(e) => setNewVehicle(prev => ({ ...prev, mileage: e.target.value }))} placeholder="Ej: 125000" />
+              </div>
             </div>
           )}
         </div>

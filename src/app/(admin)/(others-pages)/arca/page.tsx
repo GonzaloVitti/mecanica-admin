@@ -594,15 +594,23 @@ const AFIPInvoicesPage = () => {
                             size="sm"
                             variant="outline"
                             onClick={async () => {
-                              const token = localStorage.getItem('token')
-                              const url = `${process.env.NEXT_PUBLIC_API_URL}/api/afip-invoices/${invoice.id}/pdf/`
-                              const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-                              if (res.ok) {
-                                const blob = await res.blob()
+                              try {
+                                const token = localStorage.getItem('token') || ''
+                                const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+                                const url = `${baseUrl}/api/afip-invoices/${invoice.id}/pdf/`
+                                const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+                                if (!res.ok) { alert(`Error ${res.status} al obtener PDF`); return }
+                                const buf  = await res.arrayBuffer()
+                                const blob = new Blob([buf], { type: 'application/pdf' })
                                 const blobUrl = URL.createObjectURL(blob)
-                                window.open(blobUrl, '_blank')
-                                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
-                              }
+                                const cd    = res.headers.get('Content-Disposition') || ''
+                                const match = cd.match(/filename="?([^";]+)"?/)
+                                const fname = match ? match[1] : `factura_${invoice.id}.pdf`
+                                const a = document.createElement('a')
+                                a.href = blobUrl; a.target = '_blank'; a.download = fname
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 15000)
+                              } catch { alert('Error al descargar el PDF') }
                             }}
                           >
                             PDF

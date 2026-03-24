@@ -338,14 +338,14 @@ const AppSidebar: React.FC = () => {
             <>
               <Image
                 className="dark:hidden"
-                src="/images/logo/logo-mecanica.svg"
+                src="/images/logo/logo.jpeg"
                 alt="Mecanica Logo"
                 width={185}
                 height={46}
               />
               <Image
                 className="hidden dark:block"
-                src="/images/logo/logo-mecanica-dark.svg"
+                src="/images/logo/logo.jpeg"
                 alt="Mecanica Logo"
                 width={185}
                 height={46}
@@ -355,14 +355,14 @@ const AppSidebar: React.FC = () => {
             <>
               <Image
                 className="block dark:hidden"
-                src="/images/logo/logo-mecanica.svg"
+                src="/images/logo/logo.jpeg"
                 alt="Mecanica Logo"
                 width={40}
                 height={40}
               />
               <Image
                 className="hidden dark:block"
-                src="/images/logo/logo-mecanica-dark.svg"
+                src="/images/logo/logo.jpeg"
                 alt="Mecanica Logo"
                 width={40}
                 height={40}

@@ -89,16 +89,31 @@ export default function InvoiceDetailPage() {
 
   const handleDownloadPDF = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/afip-invoices/${id}/pdf/`
+      const token = localStorage.getItem('token') || ''
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '')
+      const url = `${baseUrl}/api/afip-invoices/${id}/pdf/`
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      if (!res.ok) throw new Error('Error al obtener el PDF')
-      const blob = await res.blob()
+      if (!res.ok) {
+        const txt = await res.text()
+        throw new Error(`Error ${res.status}: ${txt.slice(0, 120)}`)
+      }
+      const buf  = await res.arrayBuffer()
+      const blob = new Blob([buf], { type: 'application/pdf' })
       const blobUrl = URL.createObjectURL(blob)
-      window.open(blobUrl, '_blank')
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+      // Obtener el filename del header Content-Disposition si viene
+      const cd    = res.headers.get('Content-Disposition') || ''
+      const match = cd.match(/filename="?([^";]+)"?/)
+      const fname = match ? match[1] : `factura_${id}.pdf`
+      const a = document.createElement('a')
+      a.href     = blobUrl
+      a.target   = '_blank'
+      a.download = fname
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000)
     } catch (e: any) {
-      setAlert({ type: 'error', title: 'Error', msg: e.message })
+      setAlert({ type: 'error', title: 'Error al descargar PDF', msg: e.message })
     }
   }
 

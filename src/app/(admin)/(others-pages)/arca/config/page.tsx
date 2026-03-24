@@ -9,6 +9,7 @@ import { fetchApi } from '@/app/lib/data'
 interface AFIPConfig {
   id: string
   cuit: string
+  nombre_negocio: string
   razon_social: string
   domicilio: string
   condicion_iva: string
@@ -27,6 +28,7 @@ type AlertState = { show: boolean; type: 'success' | 'error' | 'warning' | 'info
 
 const emptyForm = {
   cuit: '',
+  nombre_negocio: '',
   razon_social: '',
   domicilio: '',
   condicion_iva: 'Responsable Inscripto',
@@ -85,6 +87,7 @@ export default function AfipConfigPage() {
     setEditingId(c.id)
     setForm({
       cuit: c.cuit,
+      nombre_negocio: c.nombre_negocio || '',
       razon_social: c.razon_social,
       domicilio: c.domicilio || '',
       condicion_iva: c.condicion_iva || 'Responsable Inscripto',
@@ -116,6 +119,7 @@ export default function AfipConfigPage() {
     try {
       const payload = {
         cuit: form.cuit.replace(/-/g, ''),
+        nombre_negocio: form.nombre_negocio,
         razon_social: form.razon_social,
         domicilio: form.domicilio,
         condicion_iva: form.condicion_iva,
@@ -292,6 +296,18 @@ export default function AfipConfigPage() {
                   />
                   {formErrors.punto_venta && <p className="text-xs text-red-500 mt-1">{formErrors.punto_venta}</p>}
                 </div>
+              </div>
+
+              <div>
+                <Label>Nombre del negocio / punto de venta</Label>
+                <Input
+                  type="text"
+                  name="nombre_negocio"
+                  value={form.nombre_negocio}
+                  onChange={e => setForm(p => ({ ...p, nombre_negocio: e.target.value }))}
+                  placeholder="Ej: MECANICA CAMIONES RAUL SANCHEZ"
+                />
+                <p className="text-xs text-gray-400 mt-1">Nombre comercial que aparece en el encabezado del PDF (opcional, si no se completa se usa la razón social)</p>
               </div>
 
               <div>

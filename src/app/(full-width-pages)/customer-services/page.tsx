@@ -1,8 +1,8 @@
- 'use client'
- import React, { useEffect, useState } from 'react'
- import { useSearchParams } from 'next/navigation'
- import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table'
- import Badge from '@/components/ui/badge/Badge'
+'use client'
+import React, { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table'
+import Badge from '@/components/ui/badge/Badge'
  
  interface WorkOrder {
    id: string
@@ -17,7 +17,7 @@
    created_at: string
  }
  
- export default function CustomerServicesPage() {
+ function CustomerServicesContent() {
    const params = useSearchParams()
    const [code, setCode] = useState('')
    const [items, setItems] = useState<WorkOrder[]>([])
@@ -149,4 +149,12 @@
        </div>
      </div>
    )
- }
+}
+
+export default function CustomerServicesPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
+      <CustomerServicesContent />
+    </Suspense>
+  )
+}

@@ -30,7 +30,7 @@ interface AFIPInvoice {
   importe_neto: string;
   importe_iva: string;
   importe_total: string;
-  estado: 'BORRADOR' | 'PENDIENTE' | 'AUTORIZADA' | 'RECHAZADA' | 'ANULADA';
+  estado: string;  // puede ser 'BORRADOR'|'AUTORIZADA'|... (backend) o 'draft'|'approved'|... (legacy)
   cae: string | null;
   fecha_vencimiento_cae: string | null;
   observaciones: string;

@@ -291,7 +291,17 @@ const ServicesPage = () => {
           showAlert('success', '✅ Factura autorizada', `CAE: ${data.cae} — ${data.numero_completo || ''}`)
           closeInvoiceModal()
         } else {
-          showAlert('warning', 'Factura creada pero pendiente', data.error_message || 'Revisá el estado en ARCA')
+          // Verificar si es error de internet
+          const errMsg = data.error_message || ''
+          const isNet  = errMsg.toLowerCase().includes('internet') || errMsg.toLowerCase().includes('conexión')
+          if (isNet) {
+            showAlert('warning',
+              '⚠️ Sin internet — Factura guardada como borrador',
+              `La factura fue guardada (ID ${data.id}) pero no pudo ser autorizada por AFIP por falta de conexión a internet. Conectate a la red y reintentá la autorización desde la sección ARCA.`
+            )
+          } else {
+            showAlert('warning', 'Factura creada pendiente', errMsg || 'Revisá el estado en ARCA')
+          }
           closeInvoiceModal()
         }
       } else {
@@ -301,7 +311,11 @@ const ServicesPage = () => {
         showAlert('error', 'Error', msg)
       }
     } catch {
-      showAlert('error', 'Error', 'Error de conexión al crear la factura')
+      if (!window.navigator.onLine) {
+        showAlert('error', '⚠️ Sin conexión a internet', 'No se pudo contactar al servidor. Verificá la red y volvé a intentarlo.')
+      } else {
+        showAlert('error', 'Error de conexión', 'No se pudo crear la factura. Intentá de nuevo.')
+      }
     } finally {
       setSavingInvoice(false)
     }

@@ -158,12 +158,31 @@ export default function AddInvoicePage() {
       }
       const res = await fetchApi<any>('/api/afip-invoices/', { method: 'POST', body: payload })
       if (res?.id) {
-        router.push(`/arca/${res.id}`)
+        // Creada — puede haber error de autorización (ej. sin internet)
+        if (res.error_message) {
+          const isNet = res.error_message.toLowerCase().includes('internet') ||
+                        res.error_message.toLowerCase().includes('conexión')
+          if (isNet) {
+            // Factura guardada en borrador, sin internet para autorizar
+            setAlert({
+              type: 'error',
+              msg: `⚠️ Sin conexión a internet — La factura fue guardada como borrador (ID ${res.id}) pero NO pudo ser autorizada por AFIP. Conectate a internet y usá "Reintentar autorización" desde el detalle de la factura.`,
+            })
+          } else {
+            router.push(`/arca/${res.id}`)
+          }
+        } else {
+          router.push(`/arca/${res.id}`)
+        }
       } else {
         setAlert({ type: 'error', msg: 'Error al crear la factura' })
       }
     } catch (e: any) {
-      setAlert({ type: 'error', msg: e?.message || 'Error al guardar' })
+      if (!window.navigator.onLine) {
+        setAlert({ type: 'error', msg: '⚠️ Sin conexión a internet. Conectate a la red y volvé a intentarlo.' })
+      } else {
+        setAlert({ type: 'error', msg: e?.message || 'Error al guardar' })
+      }
     } finally {
       setSaving(false)
     }

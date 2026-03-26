@@ -149,6 +149,7 @@ const AddServicePage = () => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     let inlineCustomer: { name?: string; phone?: string } | null = null
+    let effectiveCustomerId = customerId
     if (isCreatingCustomer && !customerId) {
       const nm = (newCustomer.name || '').trim()
       if (!nm) { showAlert('error', 'Error', 'Ingresa el nombre del cliente o selecciona uno existente'); return }
@@ -157,6 +158,7 @@ const AddServicePage = () => {
         if (created && created.id) {
           setCustomers(prev => [{ id: created.id, name: created.name, phone: created.phone }, ...prev])
           setCustomerId(created.id)
+          effectiveCustomerId = created.id
         } else {
           inlineCustomer = { name: nm, phone: (newCustomer.phone || '').trim() }
         }
@@ -165,11 +167,11 @@ const AddServicePage = () => {
       }
     }
 
-    if (!customerId && !inlineCustomer) { showAlert('error', 'Error', 'Selecciona o crea un cliente'); return }
+    if (!effectiveCustomerId && !inlineCustomer) { showAlert('error', 'Error', 'Selecciona o crea un cliente'); return }
     setIsSubmitting(true)
       try {
         const payload: any = {
-          customer: customerId || null,
+          customer: effectiveCustomerId || null,
           priority,
           promised_date: promisedDate || null,
           work_description: workDescription || '',

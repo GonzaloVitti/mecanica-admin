@@ -167,7 +167,7 @@ const AddServicePage = () => {
       }
     }
 
-    if (!effectiveCustomerId && !inlineCustomer) { showAlert('error', 'Error', 'Selecciona o crea un cliente'); return }
+    if (!isCreatingCustomer && !effectiveCustomerId) { showAlert('error', 'Error', 'Selecciona o crea un cliente'); return }
     setIsSubmitting(true)
       try {
         const payload: any = {

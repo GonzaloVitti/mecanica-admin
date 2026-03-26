@@ -62,6 +62,17 @@ const AddServicePage = () => {
   const [newCustomer, setNewCustomer] = useState<{ name: string; phone: string; email: string; address: string; tax_id: string }>({ name: '', phone: '', email: '', address: '', tax_id: '' })
   const [isCreatingVehicle, setIsCreatingVehicle] = useState(true)
   const [newVehicle, setNewVehicle] = useState<{ license_plate: string; brand: string; model: string; mileage?: string }>({ license_plate: '', brand: '', model: '', mileage: '' })
+  const [debugLog, setDebugLog] = useState<string[]>([])
+  const [debugOpen, setDebugOpen] = useState<boolean>(false)
+  const logDebug = (...args: any[]) => {
+    try { console.log(...args) } catch {}
+    try {
+      const msg = args.map((a: any) => {
+        try { return typeof a === 'string' ? a : JSON.stringify(a) } catch { return String(a) }
+      }).join(' ')
+      setDebugLog(prev => [...prev, `${new Date().toISOString()} ${msg}`].slice(-200))
+    } catch {}
+  }
 
   const showAlert = (type: AlertState['type'], title: string, message: string) => {
     setAlert({ show: true, type, title, message })
@@ -148,13 +159,32 @@ const AddServicePage = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    logDebug('Crear Servicio - Debug')
+    logDebug('isCreatingCustomer:', isCreatingCustomer)
+    logDebug('customerId:', customerId)
+    logDebug('newCustomer:', newCustomer)
+    logDebug('isCreatingVehicle:', isCreatingVehicle)
+    logDebug('vehicleId:', vehicleId)
+    logDebug('newVehicle:', newVehicle)
+    logDebug('priority:', priority)
+    logDebug('promisedDate:', promisedDate)
+    logDebug('workDescription:', workDescription)
+    logDebug('items:', items)
+    logDebug('selectedMechanics:', selectedMechanics)
+    logDebug('allocations:', allocations)
+    logDebug('installmentsEnabled:', installmentsEnabled)
+    logDebug('installmentsCount:', installmentsCount)
+    logDebug('interestRate:', interestRate)
+    logDebug('installmentStart:', installmentStart)
     let inlineCustomer: { name?: string; phone?: string } | null = null
     let effectiveCustomerId = customerId
     if (isCreatingCustomer && !customerId) {
       const nm = (newCustomer.name || '').trim()
       if (!nm) { showAlert('error', 'Error', 'Ingresa el nombre del cliente o selecciona uno existente'); return }
       try {
+        logDebug('POST /api/customers body:', { ...newCustomer })
         const created = await fetchApi<any>('/api/customers/', { method: 'POST', body: { ...newCustomer } })
+        logDebug('Respuesta /api/customers:', created)
         if (created && created.id) {
           setCustomers(prev => [{ id: created.id, name: created.name, phone: created.phone }, ...prev])
           setCustomerId(created.id)
@@ -162,12 +192,15 @@ const AddServicePage = () => {
         } else {
           inlineCustomer = { name: nm, phone: (newCustomer.phone || '').trim() }
         }
-      } catch {
+      } catch (err) {
+        logDebug('Error /api/customers:', err)
         inlineCustomer = { name: nm, phone: (newCustomer.phone || '').trim() }
       }
     }
 
     if (!isCreatingCustomer && !effectiveCustomerId) { showAlert('error', 'Error', 'Selecciona o crea un cliente'); return }
+    logDebug('effectiveCustomerId:', effectiveCustomerId)
+    logDebug('inlineCustomer:', inlineCustomer)
     setIsSubmitting(true)
       try {
         const payload: any = {
@@ -206,10 +239,19 @@ const AddServicePage = () => {
             if ((newVehicle.model || '').trim()) payload.vehicle_model = newVehicle.model.trim()
           }
         }
+        logDebug('Payload /api/work-orders:', payload)
       const data = await fetchApi('/api/work-orders/', { method: 'POST', body: payload })
+      logDebug('Respuesta /api/work-orders:', data)
       if (data) router.push('/services')
-    } catch {
-      showAlert('error', 'Error', 'No se pudo crear el servicio')
+    } catch (err: any) {
+      try {
+        const resp = err?.response
+        logDebug('Error /api/work-orders:', resp || err)
+        const msg = resp?.data?.detail || resp?.data?.error || 'No se pudo crear el servicio'
+        showAlert('error', 'Error', msg)
+      } catch {
+        showAlert('error', 'Error', 'No se pudo crear el servicio')
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -441,6 +483,14 @@ const AddServicePage = () => {
         <div className="flex justify-end gap-4 pt-6 mt-6 border-t border-gray-200 dark:border-gray-800">
           <button type="button" onClick={() => router.push('/services')} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:text-gray-300 dark:bg-transparent dark:border-gray-700 dark:hover:bg-gray-800">Cancelar</button>
           <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-400 disabled:cursor-not-allowed">{isSubmitting ? 'Creando...' : 'Crear Servicio'}</button>
+        </div>
+        <div className="mt-4">
+          <button type="button" onClick={() => setDebugOpen(s => !s)} className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300">{debugOpen ? 'Ocultar debug' : 'Ver debug'}</button>
+          {debugOpen && (
+            <div className="mt-2 p-2 border border-gray-200 dark:border-gray-700 rounded bg-gray-50 dark:bg-gray-900 text-xs text-gray-700 dark:text-gray-300">
+              <pre className="whitespace-pre-wrap break-all">{debugLog.join('\n')}</pre>
+            </div>
+          )}
         </div>
       </form>
     </div>

@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { fetchApi } from '@/app/lib/data';
 import Badge from '@/components/ui/badge/Badge';
@@ -67,7 +67,9 @@ const formatDate = (dateString: string) => {
 const CustomerDetail = () => {
   const { isOpen, openModal, closeModal } = useModal();
   const params = useParams();
+  const searchParams = useSearchParams();
   const customerId = params.id as string;
+  const isPureCustomer = (searchParams.get('type') || '') === 'customer';
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,26 +98,28 @@ const CustomerDetail = () => {
 
   // Cargar datos del cliente
   useEffect(() => {
-    const fetchUserAsCustomer = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const u = await fetchApi<UserData>(`/api/users/${customerId}/`);
-        if (u) {
+        if (isPureCustomer) {
+          // Obtener cliente desde /api/customers/{id}/
+          const c = await fetchApi<any>(`/api/customers/${customerId}/`);
+          if (!c) { setError('Cliente no encontrado'); return }
           const composed: Customer = {
-            id: String(u.id),
-            user: u,
-            name: `${u.first_name} ${u.last_name}`.trim() || u.email,
-            tax_id: '',
+            id: String(c.id),
+            user: null,
+            name: c.name || c.email || 'Sin nombre',
+            tax_id: c.tax_id || '',
             tax_condition: 'CF',
-            email: u.email,
-            phone: u.phone_number,
-            address: '',
-            is_active: u.is_active,
-            has_user_account: true,
-            created_at: u.date_joined,
-            updated_at: u.date_joined,
+            email: c.email || '',
+            phone: c.phone || '',
+            address: c.address || '',
+            is_active: c.is_active ?? true,
+            has_user_account: false,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+            public_code: c.public_code || '',
           };
-
           setCustomer(composed);
           setFormData({
             name: composed.name,
@@ -126,26 +130,58 @@ const CustomerDetail = () => {
             address: composed.address,
             is_active: composed.is_active,
           });
-          // Buscar Customer model por email para obtener cuenta corriente y public_code
-          if (u.email) {
-            try {
-              const custRes = await fetchApi<{ results: Array<{ id: string; account_id: string | null; account_balance: string; public_code?: string }> }>(
-                `/api/customers/?email=${encodeURIComponent(u.email)}&limit=1`
-              );
-              const cust = custRes?.results?.[0];
-              if (cust) {
-                // Usar el public_code del backend (calculado con Customer UUID) para consistencia
-                if (cust.public_code) setPublicCode(cust.public_code);
-                if (cust.account_id) {
-                  setAccountInfo({ id: cust.account_id, balance: cust.account_balance || '0' });
-                } else {
-                  setAccountInfo({ id: '', balance: cust.account_balance || '0' });
-                }
-              }
-            } catch {}
-          }
+          const accId = c.account_id || null;
+          const accBal = c.account_balance || '0';
+          if (accId !== undefined) setAccountInfo({ id: accId || '', balance: accBal });
+          if (c.public_code) setPublicCode(c.public_code);
         } else {
-          setError('Cliente no encontrado');
+          // Obtener usuario con rol CUSTOMER
+          const u = await fetchApi<UserData>(`/api/users/${customerId}/`);
+          if (u) {
+            const composed: Customer = {
+              id: String(u.id),
+              user: u,
+              name: `${u.first_name} ${u.last_name}`.trim() || u.email,
+              tax_id: '',
+              tax_condition: 'CF',
+              email: u.email,
+              phone: u.phone_number,
+              address: '',
+              is_active: u.is_active,
+              has_user_account: true,
+              created_at: u.date_joined,
+              updated_at: u.date_joined,
+            };
+  
+            setCustomer(composed);
+            setFormData({
+              name: composed.name,
+              tax_id: composed.tax_id,
+              tax_condition: composed.tax_condition,
+              email: composed.email,
+              phone: composed.phone,
+              address: composed.address,
+              is_active: composed.is_active,
+            });
+            if (u.email) {
+              try {
+                const custRes = await fetchApi<{ results: Array<{ id: string; account_id: string | null; account_balance: string; public_code?: string }> }>(
+                  `/api/customers/?email=${encodeURIComponent(u.email)}&limit=1`
+                );
+                const cust = custRes?.results?.[0];
+                if (cust) {
+                  if (cust.public_code) setPublicCode(cust.public_code);
+                  if (cust.account_id) {
+                    setAccountInfo({ id: cust.account_id, balance: cust.account_balance || '0' });
+                  } else {
+                    setAccountInfo({ id: '', balance: cust.account_balance || '0' });
+                  }
+                }
+              } catch {}
+            }
+          } else {
+            setError('Cliente no encontrado');
+          }
         }
       } catch (err) {
         setError('Error al cargar el cliente');
@@ -154,11 +190,8 @@ const CustomerDetail = () => {
         setLoading(false);
       }
     };
-
-    if (customerId) {
-      fetchUserAsCustomer();
-    }
-  }, [customerId]);
+    if (customerId) fetchData();
+  }, [customerId, isPureCustomer, searchParams]);
 
   const handleOpenModal = () => {
     if (customer) {
@@ -194,7 +227,7 @@ const CustomerDetail = () => {
     setUpdateLoading(true);
 
     try {
-      if (customer?.user?.id) {
+      if (!isPureCustomer && customer?.user?.id) {
         if (profileFile) {
           const fd = new FormData();
           fd.append('profile_picture', profileFile);
@@ -237,6 +270,47 @@ const CustomerDetail = () => {
           setProfileFile(null);
         }
 
+        closeModal();
+      } else if (isPureCustomer && customer?.id) {
+        // Actualizar datos del modelo Customer
+        const patch = {
+          name: formData.name,
+          tax_id: formData.tax_id,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          is_active: formData.is_active,
+        };
+        await fetchApi(`/api/customers/${customer.id}/`, {
+          method: 'PATCH',
+          body: patch,
+        });
+        const refreshed = await fetchApi<any>(`/api/customers/${customer.id}/`);
+        if (refreshed) {
+          setCustomer(prev => prev ? ({
+            ...prev,
+            name: refreshed.name || prev.name,
+            tax_id: refreshed.tax_id || prev.tax_id,
+            email: refreshed.email || prev.email,
+            phone: refreshed.phone || prev.phone,
+            address: refreshed.address || prev.address,
+            is_active: refreshed.is_active ?? prev.is_active,
+            updated_at: refreshed.updated_at || prev.updated_at,
+            public_code: refreshed.public_code || prev.public_code,
+          }) : prev);
+          setFormData(prev => ({
+            ...prev,
+            name: refreshed.name || prev.name,
+            tax_id: refreshed.tax_id || prev.tax_id,
+            email: refreshed.email || prev.email,
+            phone: refreshed.phone || prev.phone,
+            address: refreshed.address || prev.address,
+            is_active: refreshed.is_active ?? prev.is_active,
+          }));
+          if (refreshed.account_id || refreshed.account_balance) {
+            setAccountInfo({ id: refreshed.account_id || '', balance: refreshed.account_balance || '0' });
+          }
+        }
         closeModal();
       }
     } catch (err) {

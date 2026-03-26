@@ -452,16 +452,16 @@ const CustomersPage = () => {
       setLoading(true);
       const [response, custResponse] = await Promise.all([
         fetchApi<UsersApiResponse>('/api/users/customers/'),
-        fetchApi<{ results: Array<{ email: string; public_code?: string }> }>('/api/customers/?limit=500'),
+        fetchApi<{ results: any[] }>('/api/customers/?limit=500'),
       ]);
 
       const codeMap = new Map<string, string>();
-      (custResponse?.results || []).forEach(c => {
+      (custResponse?.results || []).forEach((c: any) => {
         if (c.email && c.public_code) codeMap.set(c.email, c.public_code);
       });
 
       if (response) {
-        const mapped = response.map((u) => ({
+        const mappedUsers: Customer[] = response.map((u) => ({
           id: String(u.id),
           user: u,
           name: `${u.first_name} ${u.last_name}`.trim() || u.email,
@@ -476,12 +476,39 @@ const CustomersPage = () => {
           public_code: codeMap.get(u.email) || '',
         }));
 
-        setCustomers(mapped);
-        setTotalCount(mapped.length);
+        // Agregar clientes del modelo Customer que no tengan cuenta de usuario
+        const existingEmails = new Set(
+          mappedUsers
+            .map(m => (m.email || m.user?.email || '').toLowerCase())
+            .filter(Boolean)
+        );
+        const extraCustomers: Customer[] = (custResponse?.results || [])
+          .filter((c: any) => {
+            const em = String(c.email || '').toLowerCase();
+            return !em || !existingEmails.has(em);
+          })
+          .map((c: any) => ({
+            id: String(c.id),
+            user: null,
+            name: c.name || c.email || 'Sin nombre',
+            tax_id: c.tax_id || '',
+            email: c.email || '',
+            phone: c.phone || '',
+            address: c.address || '',
+            is_active: c.is_active ?? true,
+            has_user_account: false,
+            created_at: c.created_at || new Date().toISOString(),
+            updated_at: c.updated_at || c.created_at || new Date().toISOString(),
+            public_code: c.public_code || '',
+          }));
+
+        const merged = [...mappedUsers, ...extraCustomers];
+        setCustomers(merged);
+        setTotalCount(merged.length);
         setNextPageUrl(null);
         setPrevPageUrl(null);
         const pageSize = 10;
-        setTotalPages(Math.ceil(mapped.length / pageSize) || 1);
+        setTotalPages(Math.ceil(merged.length / pageSize) || 1);
         setCurrentPage(1);
       }
     } catch (error) {
@@ -794,7 +821,7 @@ const CustomersPage = () => {
                     <TableCell className="px-4 py-3 text-gray-500 text-theme-sm dark:text-gray-400">
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/customers/${customer.user?.id ?? customer.id}`}
+                          href={`/customers/${customer.has_user_account ? customer.user?.id : customer.id}${customer.has_user_account ? '' : '?type=customer'}`}
                           className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400"
                         >
                           Ver

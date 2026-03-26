@@ -623,9 +623,7 @@ const CustomersPage = () => {
         await fetchApi(`/api/users/${customerToDelete.user.id}/delete_account/`, {
           method: 'DELETE'
         });
-
         fetchCustomers();
-        
         setAlert({
           show: true,
           type: 'success',
@@ -633,11 +631,15 @@ const CustomersPage = () => {
           message: `El cliente ${customerToDelete.name} y su cuenta de usuario han sido eliminados correctamente.`
         });
       } else {
+        await fetchApi(`/api/customers/${customerToDelete.id}/`, {
+          method: 'DELETE'
+        });
+        fetchCustomers();
         setAlert({
           show: true,
-          type: 'error',
-          title: 'Operación no disponible',
-          message: `No se puede eliminar clientes sin cuenta mientras el backend de clientes no esté disponible.`
+          type: 'success',
+          title: 'Cliente eliminado',
+          message: `El cliente ${customerToDelete.name} ha sido eliminado correctamente.`
         });
       }
     } catch (error) {
@@ -647,7 +649,7 @@ const CustomersPage = () => {
         show: true,
         type: 'error',
         title: 'Error al eliminar',
-        message: `No se pudo eliminar al cliente ${customerToDelete.name}. Verifique que tenga permisos de SuperAdmin.`
+        message: `No se pudo eliminar al cliente ${customerToDelete.name}. Verifique permisos y que el servidor esté accesible.`
       });
     } finally {
       setModalOpen(false);

@@ -153,6 +153,22 @@ const ServicesPage = () => {
       showAlert('error', 'Error', 'Error de conexión al ejecutar la acción')
     }
   }
+  const deleteService = async (id: string, number: string) => {
+    try {
+      const ok = window.confirm(`¿Eliminar el servicio ${number}? Esta acción no se puede deshacer.`)
+      if (!ok) return
+      await fetchApi(`/api/work-orders/${id}/`, { method: 'DELETE' })
+      showAlert('success', 'Eliminado', `Servicio ${number} eliminado correctamente`)
+      // Si la página actual quedó vacía, retroceder una página si es posible
+      const nextCount = Math.max(0, totalCount - 1)
+      const lastPage = Math.max(1, Math.ceil(nextCount / itemsPerPage))
+      const newPage = Math.min(currentPage, lastPage)
+      setCurrentPage(newPage)
+      loadItems(newPage, searchTerm)
+    } catch (e) {
+      showAlert('error', 'Error', 'No se pudo eliminar el servicio')
+    }
+  }
 
   const openQuotePdf = async (id: string) => {
     try {
@@ -463,6 +479,12 @@ const ServicesPage = () => {
                           {item.status !== 'CANCELLED' && (
                             <button onClick={() => callAction(item.id, 'cancel')} className="px-3 py-1 text-xs text-red-600 bg-red-100 rounded-md hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400">Cancelar</button>
                           )}
+                          <button
+                            onClick={() => deleteService(item.id, item.work_order_number)}
+                            className="px-3 py-1 text-xs text-red-700 bg-red-200 rounded-md hover:bg-red-300 dark:bg-red-900/40 dark:text-red-300"
+                          >
+                            Eliminar
+                          </button>
                         </div>
                       </TableCell>
                     </TableRow>

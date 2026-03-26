@@ -148,37 +148,28 @@ const AddServicePage = () => {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Crear cliente si se seleccionó crear uno nuevo
-    try {
-      if (isCreatingCustomer && !customerId) {
+    let inlineCustomer: { name?: string; phone?: string } | null = null
+    if (isCreatingCustomer && !customerId) {
+      const nm = (newCustomer.name || '').trim()
+      if (!nm) { showAlert('error', 'Error', 'Ingresa el nombre del cliente o selecciona uno existente'); return }
+      try {
         const created = await fetchApi<any>('/api/customers/', { method: 'POST', body: { ...newCustomer } })
-        if (!created || !created.id) throw new Error('No se pudo crear el cliente')
-        setCustomers(prev => [{ id: created.id, name: created.name, phone: created.phone }, ...prev])
-        setCustomerId(created.id)
+        if (created && created.id) {
+          setCustomers(prev => [{ id: created.id, name: created.name, phone: created.phone }, ...prev])
+          setCustomerId(created.id)
+        } else {
+          inlineCustomer = { name: nm, phone: (newCustomer.phone || '').trim() }
+        }
+      } catch {
+        inlineCustomer = { name: nm, phone: (newCustomer.phone || '').trim() }
       }
-    } catch {
-      showAlert('error', 'Error', 'No se pudo crear el cliente'); return
     }
 
-    // Crear vehículo si se seleccionó crear uno nuevo
-    try {
-      if (isCreatingVehicle && !vehicleId) {
-        if (!customerId) { showAlert('error', 'Error', 'Primero selecciona o crea un cliente'); return }
-        const createdV = await fetchApi<any>('/api/vehicles/', { method: 'POST', body: { ...newVehicle, owner: customerId } })
-        if (!createdV || !createdV.id) throw new Error('No se pudo crear el vehículo')
-        setVehicles(prev => [{ id: createdV.id, license_plate: createdV.license_plate, brand: createdV.brand, model: createdV.model, year: createdV.year }, ...prev])
-        setVehicleId(createdV.id)
-      }
-    } catch {
-      showAlert('error', 'Error', 'No se pudo crear el vehículo'); return
-    }
-
-    if (!customerId) { showAlert('error', 'Error', 'Selecciona o crea un cliente'); return }
+    if (!customerId && !inlineCustomer) { showAlert('error', 'Error', 'Selecciona o crea un cliente'); return }
     setIsSubmitting(true)
       try {
         const payload: any = {
           customer: customerId || null,
-          vehicle: vehicleId || null,
           priority,
           promised_date: promisedDate || null,
           work_description: workDescription || '',
@@ -197,6 +188,21 @@ const AddServicePage = () => {
             unit_price: Number(it.unit_price || '0'),
             tax_rate: Number(it.tax_rate || '0')
           }))
+        }
+        if (inlineCustomer) {
+          payload.customer = null
+          payload.customer_name = inlineCustomer.name || ''
+          payload.customer_phone = inlineCustomer.phone || ''
+        }
+        if (!isCreatingVehicle) {
+          payload.vehicle = vehicleId || null
+        } else {
+          const plate = (newVehicle.license_plate || '').trim()
+          if (plate) {
+            payload.vehicle_license_plate = plate
+            if ((newVehicle.brand || '').trim()) payload.vehicle_brand = newVehicle.brand.trim()
+            if ((newVehicle.model || '').trim()) payload.vehicle_model = newVehicle.model.trim()
+          }
         }
       const data = await fetchApi('/api/work-orders/', { method: 'POST', body: payload })
       if (data) router.push('/services')

@@ -203,6 +203,21 @@ const AFIPInvoicesPage = () => {
     }
   };
 
+  // Función para emitir Nota de Crédito ante AFIP
+  const emitCreditNote = async (invoiceId: string) => {
+    try {
+      const response = await fetchApi<any>(`/api/afip-invoices/${invoiceId}/emit_credit_note/`, { method: 'POST' });
+      if (response !== null) {
+        showAlert('success', 'Nota de Crédito emitida', 'La Nota de Crédito fue autorizada en AFIP y quedó registrada en el sistema.');
+        fetchInvoices(currentPage, searchTerm, statusFilter, typeFilter);
+      } else {
+        showAlert('error', 'Error', 'No se pudo emitir la Nota de Crédito');
+      }
+    } catch (err: any) {
+      showAlert('error', 'Error', err?.message || 'No se pudo emitir la Nota de Crédito');
+    }
+  };
+
   // Función para anular factura
   const cancelInvoice = async (invoiceId: string) => {
     try {
@@ -617,6 +632,28 @@ const AFIPInvoicesPage = () => {
                           </Button>
                         )}
 
+
+                        {/* Nota de Crédito: solo para facturas aprobadas que son Fact. A/B/C */}
+                        {(invoice.estado === 'approved' || invoice.estado === 'AUTORIZADA') &&
+                          ![3, 8, 13, 2, 7, 12].includes(Number(invoice.tipo_comprobante)) && (
+                          <Button
+                            size="sm"
+                            variant="warning"
+                            onClick={() => {
+                              setConfirmModal({
+                                isOpen: true,
+                                title: 'Emitir Nota de Crédito',
+                                message: `¿Emitir una Nota de Crédito para la factura N° ${invoice.numero_comprobante}? El documento se enviará a AFIP inmediatamente y no se puede deshacer.`,
+                                onConfirm: () => {
+                                  emitCreditNote(invoice.id);
+                                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                }
+                              });
+                            }}
+                          >
+                            Nota Créd.
+                          </Button>
+                        )}
 
                         {(invoice.estado === 'BORRADOR' || invoice.estado === 'RECHAZADA') && (
                           <Button

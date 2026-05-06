@@ -19,7 +19,7 @@ const AddVehiclePage = () => {
   const [customers, setCustomers] = useState<Customer[]>([])
 
   const [ownerId, setOwnerId] = useState('')
-  const [form, setForm] = useState<{ license_plate: string; brand: string; model: string; year: string; color: string }>({ license_plate: '', brand: '', model: '', year: '', color: '' })
+  const [form, setForm] = useState<{ license_plate: string; brand: string; model: string; year: string; color: string; mileage: string; notes: string }>({ license_plate: '', brand: '', model: '', year: '', color: '', mileage: '', notes: '' })
   const [imageFile, setImageFile] = useState<File | null>(null)
 
   const customerOptions = useMemo(() => customers.map(c => ({ value: c.id, label: `${c.name} ${c.phone ? `• ${c.phone}` : ''}` })), [customers])
@@ -56,6 +56,8 @@ const AddVehiclePage = () => {
         fd.append('color', form.color)
         fd.append('owner', ownerId)
         fd.append('image', imageFile)
+        if (form.mileage !== '') fd.append('mileage', form.mileage)
+        fd.append('notes', form.notes)
         created = await fetchApi<any>('/api/vehicles/', { method: 'POST', body: fd as any, isFormData: true })
       } else {
         const payload = { ...form, owner: ownerId }
@@ -102,6 +104,20 @@ const AddVehiclePage = () => {
           <div>
             <Label>Color</Label>
             <Input type="text" name="color" value={form.color} onChange={(e) => setForm(prev => ({ ...prev, color: e.target.value }))} placeholder="" />
+          </div>
+          <div>
+            <Label>Kilometraje actual</Label>
+            <Input type="number" name="mileage" value={form.mileage} onChange={(e) => setForm(prev => ({ ...prev, mileage: e.target.value }))} placeholder="Ej: 45000" />
+          </div>
+          <div className="md:col-span-2">
+            <Label>Notas / Observaciones del vehículo</Label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm(prev => ({ ...prev, notes: e.target.value }))}
+              rows={3}
+              placeholder="Estado del vehículo, accesorios, observaciones..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm"
+            />
           </div>
           <div className="md:col-span-2">
             <Label>Imagen del vehículo (opcional)</Label>

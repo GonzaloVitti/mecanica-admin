@@ -178,7 +178,8 @@ const ServicesPage = () => {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) { showAlert('error', 'Error', 'No se pudo abrir el PDF'); return }
-      const blob = await res.blob()
+      const buf = await res.arrayBuffer()
+      const blob = new Blob([buf], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
       setTimeout(() => URL.revokeObjectURL(url), 10000)
@@ -195,7 +196,8 @@ const ServicesPage = () => {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) { showAlert('error', 'Error', 'No se pudo generar el PDF'); return }
-      const blob = await res.blob()
+      const buf = await res.arrayBuffer()
+      const blob = new Blob([buf], { type: 'application/pdf' })
 
       // Descargar el PDF automáticamente
       const fileUrl = URL.createObjectURL(blob)

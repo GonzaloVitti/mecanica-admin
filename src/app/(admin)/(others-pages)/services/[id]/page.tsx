@@ -70,6 +70,16 @@ const EditServicePage = () => {
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [vehicleBrand, setVehicleBrand] = useState('')
   const [vehicleModel, setVehicleModel] = useState('')
+  const [vehicleYear, setVehicleYear] = useState('')
+  const [vehicleColor, setVehicleColor] = useState('')
+  const [vehicleMileage, setVehicleMileage] = useState('')
+  const [vehicleNotes, setVehicleNotes] = useState('')
+  const [savingMileage, setSavingMileage] = useState(false)
+  // Edición de cliente
+  const [customerEmail, setCustomerEmail] = useState('')
+  const [customerAddress, setCustomerAddress] = useState('')
+  const [customerTaxId, setCustomerTaxId] = useState('')
+  const [savingCustomer, setSavingCustomer] = useState(false)
   const [allocations, setAllocations] = useState<Array<{ id: string; method: 'CASH'|'CARD'|'TRANSFER'|'ACCOUNT'; amount: number; created_at: string }>>([])
   const [plan, setPlan] = useState<any | null>(null)
   const [installments, setInstallments] = useState<Array<{ id: string; number: number; due_date: string; amount: number; principal_share: number; interest_share: number; paid_amount: number; status: 'PENDING'|'PARTIAL'|'PAID'|'OVERDUE' }>>([])
@@ -100,7 +110,21 @@ const EditServicePage = () => {
         setVehiclePlate(data.vehicle_license_plate || '')
         setVehicleBrand(data.vehicle_brand || '')
         setVehicleModel(data.vehicle_model || '')
-        setCustomerId(data.customer?.id ?? data.customer ?? '')
+        const resolvedCustomerId = data.customer?.id ?? (data as any).customer ?? ''
+        setCustomerId(resolvedCustomerId)
+        // Cargar datos completos del cliente (email, dirección, CUIT)
+        if (resolvedCustomerId) {
+          try {
+            const cData = await fetchApi<any>(`/api/customers/${resolvedCustomerId}/`)
+            if (cData) {
+              setCustomerName(cData.name || data.customer_name || '')
+              setCustomerPhone(cData.phone || data.customer_phone || '')
+              setCustomerEmail(cData.email || '')
+              setCustomerAddress(cData.address || '')
+              setCustomerTaxId(cData.tax_id || '')
+            }
+          } catch {}
+        }
         setPriority(data.priority || 'MEDIUM')
         setPromisedDate(data.promised_date ? new Date(data.promised_date).toISOString().slice(0, 16) : '')
         setWorkDescription(data.work_description || '')
@@ -111,7 +135,22 @@ const EditServicePage = () => {
           ? assignedRaw.map((m: any) => String(typeof m === 'string' ? m : m?.id)).filter(s => s && s !== 'undefined' && s !== 'null')
           : []
         setSelectedMechanics(assignedIds)
-        setVehicleId((data.vehicle as any)?.id ?? data.vehicle ?? '')
+        const resolvedVehicleId = (data.vehicle as any)?.id ?? data.vehicle ?? ''
+        setVehicleId(resolvedVehicleId)
+        // Cargar datos completos del vehículo (km, color, notas, año)
+        if (resolvedVehicleId) {
+          try {
+            const vData = await fetchApi<any>(`/api/vehicles/${resolvedVehicleId}/`)
+            if (vData) {
+              setVehicleYear(vData.year || '')
+              setVehicleColor(vData.color || '')
+              setVehicleMileage(vData.mileage != null ? String(vData.mileage) : '')
+              setVehicleNotes(vData.notes || '')
+              if (!data.vehicle_license_plate) setVehiclePlate(vData.license_plate || '')
+              if (!data.vehicle_brand) setVehicleBrand(vData.brand || '')
+            }
+          } catch {}
+        }
         try {
           const allocRes = await fetchApi<{ results: any[] }>(`/api/work-order-payment-allocations/?work_order=${id}&limit=100`)
           setAllocations((allocRes?.results || []).map(a => ({ id: a.id, method: a.method, amount: Number(a.amount || 0), created_at: a.created_at })))
@@ -139,6 +178,46 @@ const EditServicePage = () => {
     }
     if (id) loadOrder()
   }, [id])
+
+  const updateCustomer = async () => {
+    if (!customerId) return
+    setSavingCustomer(true)
+    try {
+      const resp = await fetchApi<any>(`/api/customers/${customerId}/`, {
+        method: 'PATCH',
+        body: {
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail,
+          address: customerAddress,
+          tax_id: customerTaxId,
+        }
+      })
+      if (resp) showAlert('success', 'Cliente actualizado', 'Los datos del cliente fueron guardados correctamente')
+      else showAlert('error', 'Error', 'No se pudo actualizar el cliente')
+    } catch {
+      showAlert('error', 'Error', 'Error al actualizar el cliente')
+    } finally {
+      setSavingCustomer(false)
+    }
+  }
+
+  const updateVehicleMileage = async () => {
+    if (!vehicleId) return
+    setSavingMileage(true)
+    try {
+      const resp = await fetchApi<any>(`/api/vehicles/${vehicleId}/`, {
+        method: 'PATCH',
+        body: { mileage: vehicleMileage === '' ? null : Number(vehicleMileage) }
+      })
+      if (resp) showAlert('success', 'Kilometraje actualizado', 'El km del vehículo fue guardado correctamente')
+      else showAlert('error', 'Error', 'No se pudo actualizar el kilometraje')
+    } catch {
+      showAlert('error', 'Error', 'Error al actualizar el kilometraje')
+    } finally {
+      setSavingMileage(false)
+    }
+  }
 
   const addLaborItem = () => setItems(prev => [...prev, { item_type: 'LABOR', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
   const addPartItem = () => setItems(prev => [...prev, { item_type: 'PART', product: '', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
@@ -191,9 +270,11 @@ const EditServicePage = () => {
         headers: jwt_token ? { Authorization: `Bearer ${jwt_token}` } : {}
       })
       if (!res.ok) return
-      const blob = await res.blob()
+      const buf = await res.arrayBuffer()
+      const blob = new Blob([buf], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
     } catch {}
   }
   const generateAfipInvoice = async () => {
@@ -246,27 +327,113 @@ const EditServicePage = () => {
       ) : (
         <form onSubmit={submit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Label>Cliente</Label>
-              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800">
-                <p className="text-sm font-medium text-gray-800 dark:text-white/90">{customerName || '—'}</p>
-                {customerPhone && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{customerPhone}</p>}
+            <div className="md:col-span-2 p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/50 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Datos del cliente</h3>
+                {customerId && (
+                  <button
+                    type="button"
+                    onClick={updateCustomer}
+                    disabled={savingCustomer || !customerId}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {savingCustomer ? 'Guardando…' : 'Guardar cliente'}
+                  </button>
+                )}
               </div>
+              {customerId ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Nombre</Label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label>Teléfono</Label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      placeholder="—"
+                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label>CUIT / DNI</Label>
+                    <input
+                      type="text"
+                      value={customerTaxId}
+                      onChange={(e) => setCustomerTaxId(e.target.value)}
+                      placeholder="—"
+                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Dirección</Label>
+                    <input
+                      type="text"
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                      placeholder="—"
+                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 dark:text-gray-500">Sin cliente asignado</p>
+              )}
             </div>
-            <div>
+            <div className="md:col-span-2">
               <Label>Vehículo</Label>
               <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800">
                 {vehiclePlate || vehicleBrand ? (
-                  <>
-                    <p className="text-sm font-medium text-gray-800 dark:text-white/90">{vehiclePlate || '—'}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                    <span className="text-sm font-medium text-gray-800 dark:text-white/90">{vehiclePlate || '—'}</span>
                     {(vehicleBrand || vehicleModel) && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{[vehicleBrand, vehicleModel].filter(Boolean).join(' ')}</p>
+                      <span className="text-sm text-gray-600 dark:text-gray-300">{[vehicleBrand, vehicleModel].filter(Boolean).join(' ')}</span>
                     )}
-                  </>
+                    {vehicleYear && <span className="text-xs text-gray-500 dark:text-gray-400">Año: {vehicleYear}</span>}
+                    {vehicleColor && <span className="text-xs text-gray-500 dark:text-gray-400">Color: {vehicleColor}</span>}
+                  </div>
                 ) : (
                   <p className="text-sm text-gray-400 dark:text-gray-500">Sin vehículo</p>
                 )}
+                {vehicleNotes && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">{vehicleNotes}</p>
+                )}
               </div>
+              {vehicleId && (
+                <div className="mt-2 flex gap-2 items-center">
+                  <input
+                    type="number"
+                    value={vehicleMileage}
+                    onChange={(e) => setVehicleMileage(e.target.value)}
+                    placeholder="Kilometraje actual"
+                    className="flex-1 h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={updateVehicleMileage}
+                    disabled={savingMileage}
+                    className="px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 whitespace-nowrap"
+                  >
+                    {savingMileage ? 'Guardando…' : 'Actualizar km'}
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <Label>Mecánicos</Label>

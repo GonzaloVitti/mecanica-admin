@@ -74,12 +74,14 @@ const EditServicePage = () => {
   const [vehicleColor, setVehicleColor] = useState('')
   const [vehicleMileage, setVehicleMileage] = useState('')
   const [vehicleNotes, setVehicleNotes] = useState('')
-  const [savingMileage, setSavingMileage] = useState(false)
+  const [savingVehicle, setSavingVehicle] = useState(false)
   // Edición de cliente
   const [customerEmail, setCustomerEmail] = useState('')
   const [customerAddress, setCustomerAddress] = useState('')
   const [customerTaxId, setCustomerTaxId] = useState('')
   const [savingCustomer, setSavingCustomer] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState(false)
+  const [editingVehicle, setEditingVehicle] = useState(false)
   const [allocations, setAllocations] = useState<Array<{ id: string; method: 'CASH'|'CARD'|'TRANSFER'|'ACCOUNT'; amount: number; created_at: string }>>([])
   const [plan, setPlan] = useState<any | null>(null)
   const [installments, setInstallments] = useState<Array<{ id: string; number: number; due_date: string; amount: number; principal_share: number; interest_share: number; paid_amount: number; status: 'PENDING'|'PARTIAL'|'PAID'|'OVERDUE' }>>([])
@@ -193,7 +195,7 @@ const EditServicePage = () => {
           tax_id: customerTaxId,
         }
       })
-      if (resp) showAlert('success', 'Cliente actualizado', 'Los datos del cliente fueron guardados correctamente')
+      if (resp) { showAlert('success', 'Cliente actualizado', 'Los datos del cliente fueron guardados correctamente'); setEditingCustomer(false) }
       else showAlert('error', 'Error', 'No se pudo actualizar el cliente')
     } catch {
       showAlert('error', 'Error', 'Error al actualizar el cliente')
@@ -202,20 +204,28 @@ const EditServicePage = () => {
     }
   }
 
-  const updateVehicleMileage = async () => {
+  const updateVehicle = async () => {
     if (!vehicleId) return
-    setSavingMileage(true)
+    setSavingVehicle(true)
     try {
       const resp = await fetchApi<any>(`/api/vehicles/${vehicleId}/`, {
         method: 'PATCH',
-        body: { mileage: vehicleMileage === '' ? null : Number(vehicleMileage) }
+        body: {
+          license_plate: vehiclePlate,
+          brand: vehicleBrand,
+          model: vehicleModel,
+          year: vehicleYear,
+          color: vehicleColor,
+          mileage: vehicleMileage === '' ? null : Number(vehicleMileage),
+          notes: vehicleNotes,
+        }
       })
-      if (resp) showAlert('success', 'Kilometraje actualizado', 'El km del vehículo fue guardado correctamente')
-      else showAlert('error', 'Error', 'No se pudo actualizar el kilometraje')
+      if (resp) { showAlert('success', 'Vehículo actualizado', 'Los datos del vehículo fueron guardados correctamente'); setEditingVehicle(false) }
+      else showAlert('error', 'Error', 'No se pudo actualizar el vehículo')
     } catch {
-      showAlert('error', 'Error', 'Error al actualizar el kilometraje')
+      showAlert('error', 'Error', 'Error al actualizar el vehículo')
     } finally {
-      setSavingMileage(false)
+      setSavingVehicle(false)
     }
   }
 
@@ -327,111 +337,141 @@ const EditServicePage = () => {
       ) : (
         <form onSubmit={submit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2 p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/50 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Datos del cliente</h3>
-                {customerId && (
-                  <button
-                    type="button"
-                    onClick={updateCustomer}
-                    disabled={savingCustomer || !customerId}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {savingCustomer ? 'Guardando…' : 'Guardar cliente'}
+            {/* ── Card cliente ─────────────────────────────────── */}
+            <div className="md:col-span-2 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+              {/* cabecera */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Cliente</span>
+                {customerId && !editingCustomer && (
+                  <button type="button" onClick={() => setEditingCustomer(true)}
+                    className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium">
+                    Editar
                   </button>
                 )}
               </div>
-              {customerId ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <Label>Nombre</Label>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <Label>Teléfono</Label>
-                    <input
-                      type="tel"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <Label>Email</Label>
-                    <input
-                      type="email"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      placeholder="—"
-                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <Label>CUIT / DNI</Label>
-                    <input
-                      type="text"
-                      value={customerTaxId}
-                      onChange={(e) => setCustomerTaxId(e.target.value)}
-                      placeholder="—"
-                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label>Dirección</Label>
-                    <input
-                      type="text"
-                      value={customerAddress}
-                      onChange={(e) => setCustomerAddress(e.target.value)}
-                      placeholder="—"
-                      className="mt-1 w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
+
+              {/* vista */}
+              {!editingCustomer ? (
+                <div className="px-4 py-3">
+                  {customerId ? (
+                    <>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{customerName || '—'}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex flex-wrap gap-x-3">
+                        {customerPhone && <span>{customerPhone}</span>}
+                        {customerEmail && <span>{customerEmail}</span>}
+                        {customerTaxId && <span>CUIT {customerTaxId}</span>}
+                        {customerAddress && <span>{customerAddress}</span>}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400">Sin cliente asignado</p>
+                  )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-400 dark:text-gray-500">Sin cliente asignado</p>
+                /* edición */
+                <div className="px-4 py-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { label: 'Nombre',     value: customerName,    set: setCustomerName,    type: 'text'  },
+                      { label: 'Teléfono',   value: customerPhone,   set: setCustomerPhone,   type: 'tel'   },
+                      { label: 'Email',      value: customerEmail,   set: setCustomerEmail,   type: 'email' },
+                      { label: 'CUIT / DNI', value: customerTaxId,   set: setCustomerTaxId,   type: 'text'  },
+                    ].map(({ label, value, set, type }) => (
+                      <div key={label}>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
+                        <input type={type} value={value} onChange={e => set(e.target.value)}
+                          className="w-full h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                    ))}
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Dirección</label>
+                      <input type="text" value={customerAddress} onChange={e => setCustomerAddress(e.target.value)}
+                        className="w-full h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setEditingCustomer(false)}
+                      className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={updateCustomer} disabled={savingCustomer}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">
+                      {savingCustomer ? 'Guardando…' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-            <div className="md:col-span-2">
-              <Label>Vehículo</Label>
-              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800">
-                {vehiclePlate || vehicleBrand ? (
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                    <span className="text-sm font-medium text-gray-800 dark:text-white/90">{vehiclePlate || '—'}</span>
-                    {(vehicleBrand || vehicleModel) && (
-                      <span className="text-sm text-gray-600 dark:text-gray-300">{[vehicleBrand, vehicleModel].filter(Boolean).join(' ')}</span>
-                    )}
-                    {vehicleYear && <span className="text-xs text-gray-500 dark:text-gray-400">Año: {vehicleYear}</span>}
-                    {vehicleColor && <span className="text-xs text-gray-500 dark:text-gray-400">Color: {vehicleColor}</span>}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400 dark:text-gray-500">Sin vehículo</p>
-                )}
-                {vehicleNotes && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">{vehicleNotes}</p>
+            {/* ── Card vehículo ─────────────────────────────────── */}
+            <div className="md:col-span-2 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+              {/* cabecera */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Vehículo</span>
+                {vehicleId && !editingVehicle && (
+                  <button type="button" onClick={() => setEditingVehicle(true)}
+                    className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium">
+                    Editar
+                  </button>
                 )}
               </div>
-              {vehicleId && (
-                <div className="mt-2 flex gap-2 items-center">
-                  <input
-                    type="number"
-                    value={vehicleMileage}
-                    onChange={(e) => setVehicleMileage(e.target.value)}
-                    placeholder="Kilometraje actual"
-                    className="flex-1 h-10 px-3 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={updateVehicleMileage}
-                    disabled={savingMileage}
-                    className="px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 whitespace-nowrap"
-                  >
-                    {savingMileage ? 'Guardando…' : 'Actualizar km'}
-                  </button>
+
+              {/* vista */}
+              {!editingVehicle ? (
+                <div className="px-4 py-3">
+                  {vehicleId ? (
+                    <>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {vehiclePlate || '—'}
+                        {(vehicleBrand || vehicleModel) && (
+                          <span className="font-normal text-gray-600 dark:text-gray-300"> · {[vehicleBrand, vehicleModel].filter(Boolean).join(' ')}</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex flex-wrap gap-x-3">
+                        {vehicleYear  && <span>Año {vehicleYear}</span>}
+                        {vehicleColor && <span>{vehicleColor}</span>}
+                        {vehicleMileage && <span>{Number(vehicleMileage).toLocaleString('es-AR')} km</span>}
+                      </p>
+                      {vehicleNotes && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 italic">{vehicleNotes}</p>}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400">Sin vehículo asignado</p>
+                  )}
+                </div>
+              ) : (
+                /* edición */
+                <div className="px-4 py-4 space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      { label: 'Patente',  value: vehiclePlate, set: setVehiclePlate, type: 'text'   },
+                      { label: 'Marca',    value: vehicleBrand, set: setVehicleBrand, type: 'text'   },
+                      { label: 'Modelo',   value: vehicleModel, set: setVehicleModel, type: 'text'   },
+                      { label: 'Año',      value: vehicleYear,  set: setVehicleYear,  type: 'text'   },
+                      { label: 'Color',    value: vehicleColor, set: setVehicleColor, type: 'text'   },
+                      { label: 'Kilometraje', value: vehicleMileage, set: setVehicleMileage, type: 'number' },
+                    ].map(({ label, value, set, type }) => (
+                      <div key={label}>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label}</label>
+                        <input type={type} value={value} onChange={e => set(e.target.value)} placeholder={type === 'number' ? '0' : ''}
+                          className="w-full h-9 px-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                    ))}
+                    <div className="col-span-2 sm:col-span-3">
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Notas</label>
+                      <textarea value={vehicleNotes} onChange={e => setVehicleNotes(e.target.value)} rows={2}
+                        placeholder="Observaciones del vehículo…"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setEditingVehicle(false)}
+                      className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                      Cancelar
+                    </button>
+                    <button type="button" onClick={updateVehicle} disabled={savingVehicle}
+                      className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">
+                      {savingVehicle ? 'Guardando…' : 'Guardar'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

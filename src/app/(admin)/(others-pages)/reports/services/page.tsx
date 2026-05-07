@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table'
 import Badge from '@/components/ui/badge/Badge'
 import { fetchApi } from '@/app/lib/data'
@@ -198,7 +199,8 @@ const ServicesReportsPage = () => {
     setIsExporting(true)
     try {
       const data = await fetchAllFiltered()
-      const rows = data.map(item => ({
+      const totalAmount = data.reduce((sum, item) => sum + (parseFloat(item.final_total) || 0), 0)
+      const rows: Record<string, string | number>[] = data.map(item => ({
         'Número': item.work_order_number,
         'Cliente': item.customer_name || '',
         'Teléfono': item.customer_phone || '',
@@ -208,10 +210,23 @@ const ServicesReportsPage = () => {
         'Total': parseFloat(item.final_total) || 0,
         'Fecha': new Date(item.created_at).toLocaleDateString('es-AR'),
       }))
+      // Fila separadora vacía
+      rows.push({ 'Número': '', 'Cliente': '', 'Teléfono': '', 'Patente': '', 'Vehículo': '', 'Estado': '', 'Total': '', 'Fecha': '' })
+      // Fila de totales
+      rows.push({
+        'Número': '',
+        'Cliente': '',
+        'Teléfono': '',
+        'Patente': '',
+        'Vehículo': '',
+        'Estado': `TOTAL (${data.length} servicios)`,
+        'Total': totalAmount,
+        'Fecha': '',
+      })
       const ws = XLSX.utils.json_to_sheet(rows)
       ws['!cols'] = [
         { wch: 14 }, { wch: 28 }, { wch: 16 }, { wch: 12 },
-        { wch: 22 }, { wch: 18 }, { wch: 14 }, { wch: 14 },
+        { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 14 },
       ]
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Servicios')
@@ -228,6 +243,7 @@ const ServicesReportsPage = () => {
     setIsExporting(true)
     try {
       const data = await fetchAllFiltered()
+      const totalAmount = data.reduce((sum, item) => sum + (parseFloat(item.final_total) || 0), 0)
       const { jsPDF } = await import('jspdf')
       const autoTable = (await import('jspdf-autotable')).default
       const doc = new jsPDF({ orientation: 'landscape' })
@@ -255,8 +271,16 @@ const ServicesReportsPage = () => {
           formatCurrency(item.final_total),
           new Date(item.created_at).toLocaleDateString('es-AR'),
         ]),
+        foot: [[
+          '', '', '', '', '',
+          `TOTAL (${data.length} servicios)`,
+          formatCurrency(totalAmount),
+          '',
+        ]],
+        showFoot: 'lastPage',
         styles: { fontSize: 8 },
         headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
+        footStyles: { fillColor: [239, 246, 255], textColor: [17, 24, 39], fontStyle: 'bold', fontSize: 9 },
       })
 
       const filename = `servicios_${startDate}_${endDate}.pdf`
@@ -373,6 +397,7 @@ const ServicesReportsPage = () => {
                     <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Estado</TableCell>
                     <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Total</TableCell>
                     <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400">Fecha</TableCell>
+                    <TableCell isHeader className="px-5 py-3 font-medium text-gray-500 text-start text-theme-xs dark:text-gray-400"></TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
@@ -389,6 +414,11 @@ const ServicesReportsPage = () => {
                         <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400"><Badge size="sm" color={statusColor(item.status)}>{statusText(item.status)}</Badge></TableCell>
                         <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">{formatCurrency(item.final_total)}</TableCell>
                         <TableCell className="px-4 py-3 text-gray-500 text-start text-theme-sm dark:text-gray-400">{new Date(item.created_at).toLocaleDateString('es-AR', { year: 'numeric', month: 'short', day: 'numeric' })}</TableCell>
+                        <TableCell className="px-4 py-3 text-start">
+                          <Link href={`/services/${item.id}`} className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline whitespace-nowrap">
+                            Ver detalle →
+                          </Link>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}

@@ -177,14 +177,22 @@ const ServicesPage = () => {
       const res = await fetch(`${baseUrl}/api/work-orders/${id}/quote_pdf/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) { showAlert('error', 'Error', 'No se pudo abrir el PDF'); return }
+      if (!res.ok) { showAlert('error', 'Error', 'No se pudo generar el presupuesto'); return }
+      const cd = res.headers.get('Content-Disposition') || ''
+      const match = cd.match(/filename="?([^";]+)"?/)
+      const fname = match ? match[1] : `presupuesto_${id}.pdf`
       const buf = await res.arrayBuffer()
       const blob = new Blob([buf], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fname
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 15000)
     } catch {
-      showAlert('error', 'Error', 'Error al abrir el presupuesto')
+      showAlert('error', 'Error', 'Error al descargar el presupuesto')
     }
   }
 
@@ -196,14 +204,17 @@ const ServicesPage = () => {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) { showAlert('error', 'Error', 'No se pudo generar el PDF'); return }
+      const cd = res.headers.get('Content-Disposition') || ''
+      const match = cd.match(/filename="?([^";]+)"?/)
+      const fname = match ? match[1] : `presupuesto_${item.work_order_number}.pdf`
       const buf = await res.arrayBuffer()
-      const blob = new Blob([buf], { type: 'application/pdf' })
+      const file = new File([buf], fname, { type: 'application/pdf' })
 
-      // Descargar el PDF automáticamente
-      const fileUrl = URL.createObjectURL(blob)
+      // Descargar el PDF automáticamente con el nombre correcto
+      const fileUrl = URL.createObjectURL(file)
       const a = document.createElement('a')
       a.href = fileUrl
-      a.download = `presupuesto-${item.work_order_number}.pdf`
+      a.download = fname
       a.click()
       setTimeout(() => URL.revokeObjectURL(fileUrl), 10000)
 

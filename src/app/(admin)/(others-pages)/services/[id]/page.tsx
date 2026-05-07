@@ -274,17 +274,25 @@ const EditServicePage = () => {
   const openQuotePdf = async () => {
     try {
       const baseUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim()
-      const jwt_token = localStorage.getItem('token') || ''
+      const jwt_token = localStorage.getItem('accessToken') || localStorage.getItem('token') || ''
       const res = await fetch(`${baseUrl}/api/work-orders/${id}/quote_pdf/`, {
         method: 'GET',
         headers: jwt_token ? { Authorization: `Bearer ${jwt_token}` } : {}
       })
       if (!res.ok) return
+      const cd = res.headers.get('Content-Disposition') || ''
+      const match = cd.match(/filename="?([^";]+)"?/)
+      const fname = match ? match[1] : `presupuesto_${id}.pdf`
       const buf = await res.arrayBuffer()
       const blob = new Blob([buf], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fname
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 15000)
     } catch {}
   }
   const generateAfipInvoice = async () => {

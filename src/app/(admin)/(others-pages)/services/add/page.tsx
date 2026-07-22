@@ -111,10 +111,12 @@ const AddServicePage = () => {
   }, [customerId])
 
   const addLaborItem = () => {
-    setItems(prev => [...prev, { item_type: 'LABOR', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
+    // Mano de obra: precio neto, se le agrega IVA (21% por defecto)
+    setItems(prev => [...prev, { item_type: 'LABOR', description: '', quantity: '1', unit_price: '0', tax_rate: '21' }])
   }
   const addPartItem = () => {
-    setItems(prev => [...prev, { item_type: 'PART', product: '', description: '', quantity: '1', unit_price: '0', tax_rate: '21' }])
+    // Repuesto: el precio ya incluye IVA (se compra en otro lado), no se le suma
+    setItems(prev => [...prev, { item_type: 'PART', product: '', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
   }
   const updateItem = (index: number, patch: Partial<WorkOrderItemForm>) => {
     setItems(prev => prev.map((it, i) => i === index ? { ...it, ...patch } : it))
@@ -124,14 +126,18 @@ const AddServicePage = () => {
   }
 
   const totals = useMemo(() => {
-    const base = items.reduce((acc, it) => acc + Number(it.quantity || '0') * Number(it.unit_price || '0'), 0)
-    const iva = items.reduce((acc, it) => {
+    // Mano de obra: neto + IVA aparte. Repuestos: precio final (IVA ya incluido).
+    const laborBase = items.reduce((acc, it) => it.item_type === 'LABOR'
+      ? acc + Number(it.quantity || '0') * Number(it.unit_price || '0') : acc, 0)
+    const laborIva = items.reduce((acc, it) => {
+      if (it.item_type !== 'LABOR') return acc
       const b = Number(it.quantity || '0') * Number(it.unit_price || '0')
-      const t = Number(it.tax_rate || '0')
-      return acc + b * (t / 100)
+      return acc + b * (Number(it.tax_rate || '0') / 100)
     }, 0)
-    const total = base + iva
-    return { base, iva, total }
+    const partsTotal = items.reduce((acc, it) => it.item_type === 'PART'
+      ? acc + Number(it.quantity || '0') * Number(it.unit_price || '0') : acc, 0)
+    const total = laborBase + laborIva + partsTotal
+    return { laborBase, laborIva, partsTotal, total }
   }, [items])
 
   const [autoPaymentFill, setAutoPaymentFill] = useState<boolean>(true)
@@ -221,7 +227,8 @@ const AddServicePage = () => {
             description: it.description,
             quantity: Number(it.quantity || '0'),
             unit_price: Number(it.unit_price || '0'),
-            tax_rate: Number(it.tax_rate || '0')
+            // Repuesto: precio con IVA incluido → no se le suma IVA
+            tax_rate: it.item_type === 'PART' ? 0 : Number(it.tax_rate || '0')
           }))
         }
         if (inlineCustomer) {
@@ -383,7 +390,11 @@ const AddServicePage = () => {
               </div>
               <div>
                 <Label>IVA %</Label>
-                <Input type="number" step="0.01" name={`tax-${idx}`} value={it.tax_rate} onChange={(e) => updateItem(idx, { tax_rate: e.target.value })} placeholder="0" />
+                {it.item_type === 'PART' ? (
+                  <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-md" title="El precio del repuesto ya incluye IVA">Incluido</div>
+                ) : (
+                  <Input type="number" step="0.01" name={`tax-${idx}`} value={it.tax_rate} onChange={(e) => updateItem(idx, { tax_rate: e.target.value })} placeholder="0" />
+                )}
               </div>
               <div className="flex items-end justify-end">
                 <button type="button" onClick={() => removeItem(idx)} className="px-3 py-2 text-xs text-red-600 bg-red-100 rounded-md hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400">Eliminar</button>
@@ -397,12 +408,16 @@ const AddServicePage = () => {
         <div className="flex justify-end">
           <div className="mt-4 w-full md:w-1/2 lg:w-1/3 border border-gray-200 dark:border-gray-800 rounded-md p-4">
             <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
-              <span>Subtotal</span>
-              <span>{totals.base.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+              <span>Mano de obra (neto)</span>
+              <span>{totals.laborBase.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
-              <span>IVA</span>
-              <span>{totals.iva.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+              <span>IVA mano de obra</span>
+              <span>{totals.laborIva.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+            </div>
+            <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300">
+              <span>Repuestos (IVA incl.)</span>
+              <span>{totals.partsTotal.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
             </div>
             <div className="flex justify-between font-semibold text-gray-900 dark:text-white mt-2">
               <span>Total</span>

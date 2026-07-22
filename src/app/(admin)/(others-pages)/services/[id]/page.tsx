@@ -229,7 +229,8 @@ const EditServicePage = () => {
     }
   }
 
-  const addLaborItem = () => setItems(prev => [...prev, { item_type: 'LABOR', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
+  // Mano de obra: se le agrega IVA (21% por defecto). Repuesto: el precio ya incluye IVA (no se suma).
+  const addLaborItem = () => setItems(prev => [...prev, { item_type: 'LABOR', description: '', quantity: '1', unit_price: '0', tax_rate: '21' }])
   const addPartItem = () => setItems(prev => [...prev, { item_type: 'PART', product: '', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
   const updateItem = (index: number, patch: Partial<WorkOrderItemForm>) => setItems(prev => prev.map((it, i) => i === index ? { ...it, ...patch } : it))
   const removeItem = (index: number) => setItems(prev => prev.filter((_, i) => i !== index))
@@ -253,7 +254,8 @@ const EditServicePage = () => {
             description: it.description,
             quantity: Number(it.quantity || '0'),
             unit_price: Number(it.unit_price || '0'),
-            tax_rate: Number(it.tax_rate || '0')
+            // Repuesto: precio con IVA incluido → no se le suma IVA
+            tax_rate: it.item_type === 'PART' ? 0 : Number(it.tax_rate || '0')
           }))
         }
       const data = await fetchApi(`/api/work-orders/${id}/`, { method: 'PUT', body: payload })
@@ -546,7 +548,11 @@ const EditServicePage = () => {
                 </div>
                 <div>
                   <Label>IVA %</Label>
-                  <Input type="number" step="0.01" name={`tax-${idx}`} value={it.tax_rate} onChange={(e) => updateItem(idx, { tax_rate: e.target.value })} placeholder="0" />
+                  {it.item_type === 'PART' ? (
+                    <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-md" title="El precio del repuesto ya incluye IVA">Incluido</div>
+                  ) : (
+                    <Input type="number" step="0.01" name={`tax-${idx}`} value={it.tax_rate} onChange={(e) => updateItem(idx, { tax_rate: e.target.value })} placeholder="0" />
+                  )}
                 </div>
                 <div className="flex items-end justify-end">
                   <button type="button" onClick={() => removeItem(idx)} className="px-3 py-2 text-xs text-red-600 bg-red-100 rounded-md hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400">Eliminar</button>

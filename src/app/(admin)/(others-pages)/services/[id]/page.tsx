@@ -8,7 +8,20 @@ import Input from '@/components/form/input/InputField'
 import Button from '@/components/ui/button/Button'
 import { fetchApi } from '@/app/lib/data'
 import ProductSearch from '@/components/product/ProductSearch'
+import CommonMultiSelect from '@/components/common/MultiSelect'
 import Badge from '@/components/ui/badge/Badge'
+
+type WorkOrderStatus = 'NEW' | 'DIAGNOSTIC' | 'IN_PROGRESS' | 'WAITING_PARTS' | 'ON_HOLD' | 'COMPLETED' | 'DELIVERED' | 'CANCELLED'
+const STATUS_OPTIONS: Array<{ value: WorkOrderStatus; label: string }> = [
+  { value: 'NEW', label: 'Nueva' },
+  { value: 'DIAGNOSTIC', label: 'Diagnóstico' },
+  { value: 'IN_PROGRESS', label: 'En proceso' },
+  { value: 'WAITING_PARTS', label: 'Esperando repuestos' },
+  { value: 'ON_HOLD', label: 'En espera' },
+  { value: 'COMPLETED', label: 'Completada' },
+  { value: 'DELIVERED', label: 'Entregada' },
+  { value: 'CANCELLED', label: 'Cancelada' },
+]
 
 interface Product { id: string; name: string; retail_price: string; current_stock: number; barcode?: string }
 
@@ -59,6 +72,7 @@ const EditServicePage = () => {
   const [customerId, setCustomerId] = useState('')
   const [vehicleId, setVehicleId] = useState('')
   const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM')
+  const [status, setStatus] = useState<WorkOrderStatus>('NEW')
   const [promisedDate, setPromisedDate] = useState('')
   const [workDescription, setWorkDescription] = useState('')
   const [notes, setNotes] = useState('')
@@ -128,7 +142,9 @@ const EditServicePage = () => {
           } catch {}
         }
         setPriority(data.priority || 'MEDIUM')
-        setPromisedDate(data.promised_date ? new Date(data.promised_date).toISOString().slice(0, 16) : '')
+        setStatus((data.status as WorkOrderStatus) || 'NEW')
+        // datetime-local espera hora local, no UTC
+        setPromisedDate(data.promised_date ? (() => { const d = new Date(data.promised_date as string); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) })() : '')
         setWorkDescription(data.work_description || '')
         setNotes(data.notes || '')
         setItems((data.items || []).map((it: any) => ({ id: it.id, item_type: it.item_type, product: it.product || '', description: it.description || '', quantity: String(it.quantity || '1'), unit_price: String(it.unit_price || '0'), tax_rate: String(it.tax_rate || '0') })))
@@ -234,14 +250,39 @@ const EditServicePage = () => {
   const addPartItem = () => setItems(prev => [...prev, { item_type: 'PART', product: '', description: '', quantity: '1', unit_price: '0', tax_rate: '0' }])
   const updateItem = (index: number, patch: Partial<WorkOrderItemForm>) => setItems(prev => prev.map((it, i) => i === index ? { ...it, ...patch } : it))
   const removeItem = (index: number) => setItems(prev => prev.filter((_, i) => i !== index))
+  // Permite corregir un ítem cargado con el tipo equivocado (mano de obra ↔ repuesto)
+  const changeItemType = (index: number, type: ItemType) => setItems(prev => prev.map((it, i) => {
+    if (i !== index || it.item_type === type) return it
+    return type === 'PART'
+      ? { ...it, item_type: 'PART', tax_rate: '0' }
+      : { ...it, item_type: 'LABOR', product: '', tax_rate: '21' }
+  }))
+
+  const totals = useMemo(() => {
+    // Mano de obra: neto + IVA aparte. Repuestos: precio final (IVA ya incluido).
+    let laborBase = 0, laborIva = 0, partsTotal = 0
+    for (const it of items) {
+      const b = Number(it.quantity || '0') * Number(it.unit_price || '0')
+      if (it.item_type === 'LABOR') {
+        laborBase += b
+        laborIva += b * (Number(it.tax_rate || '0') / 100)
+      } else {
+        partsTotal += b
+      }
+    }
+    return { laborBase, laborIva, partsTotal, total: laborBase + laborIva + partsTotal }
+  }, [items])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const invalid = items.findIndex(it => !(Number(it.quantity) > 0))
+    if (invalid >= 0) { showAlert('warning', 'Cantidad inválida', `El ítem #${invalid + 1} debe tener cantidad mayor a 0`); return }
     setIsSubmitting(true)
     try {
         const payload: any = {
           customer: customerId || null,
           vehicle: vehicleId || null,
+          status,
           priority,
           promised_date: promisedDate || null,
           work_description: workDescription || '',
@@ -260,8 +301,10 @@ const EditServicePage = () => {
         }
       const data = await fetchApi(`/api/work-orders/${id}/`, { method: 'PUT', body: payload })
       if (data) router.push('/services')
-    } catch {
-      showAlert('error', 'Error', 'No se pudo actualizar el servicio')
+    } catch (err: any) {
+      const resp = err?.response?.data
+      const msg = resp?.detail || resp?.error || (resp ? JSON.stringify(resp) : 'No se pudo actualizar el servicio')
+      showAlert('error', 'Error', msg)
     } finally {
       setIsSubmitting(false)
     }
@@ -487,15 +530,13 @@ const EditServicePage = () => {
             </div>
             <div>
               <Label>Mecánicos</Label>
-              <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-gray-800 min-h-[42px]">
-                {selectedMechanics.length > 0 ? (
-                  <p className="text-sm text-gray-800 dark:text-white/90">
-                    {mechanicOptions.filter(m => selectedMechanics.includes(m.value)).map(m => m.label).join(', ') || '—'}
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-400 dark:text-gray-500">Sin mecánicos asignados</p>
-                )}
-              </div>
+              <CommonMultiSelect options={mechanicOptions} values={selectedMechanics} placeholder="Selecciona mecánicos" onChange={setSelectedMechanics} />
+            </div>
+            <div>
+              <Label>Estado</Label>
+              <select className="h-11 w-full appearance-none rounded-lg border border-gray-300 px-4 py-2.5 pr-11 text-sm shadow-theme-xs focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" value={status} onChange={(e) => setStatus(e.target.value as WorkOrderStatus)}>
+                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
             <div>
               <Label>Prioridad</Label>
@@ -527,10 +568,23 @@ const EditServicePage = () => {
           </div>
           <div className="space-y-4">
             {items.map((it, idx) => (
-              <div key={idx} className="grid grid-cols-1 md:grid-cols-6 gap-3 border border-gray-200 dark:border-gray-700 rounded-md p-3">
+              <div key={it.id || `new-${idx}`} className="grid grid-cols-1 md:grid-cols-6 gap-3 border border-gray-200 dark:border-gray-700 rounded-md p-3">
+                <div className="md:col-span-6 flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Tipo:</span>
+                  <select className="h-8 rounded-md border border-gray-300 px-2 text-xs dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" value={it.item_type} onChange={(e) => changeItemType(idx, e.target.value as ItemType)}>
+                    <option value="LABOR">Mano de obra</option>
+                    <option value="PART">Repuesto</option>
+                  </select>
+                </div>
                 <div className="md:col-span-2">
                   {it.item_type === 'PART' ? (
-                    <ProductSearch products={products.map(p => ({ id: p.id, name: p.name, price: Number(p.retail_price || '0'), stock: p.current_stock, barcode: p.barcode }))} onSelect={(pid) => { const p = products.find(x => x.id === pid); updateItem(idx, { product: pid, description: p?.name || '', unit_price: p?.retail_price || '0' }) }} placeholder="Buscar repuesto" value={it.product || ''} />
+                    <div className="space-y-2">
+                      <ProductSearch products={products.map(p => ({ id: p.id, name: p.name, price: Number(p.retail_price || '0'), stock: p.current_stock, barcode: p.barcode }))} onSelect={(pid) => { const p = products.find(x => x.id === pid); updateItem(idx, pid ? { product: pid, description: p?.name || it.description, unit_price: p?.retail_price || it.unit_price } : { product: '' }) }} placeholder="Buscar repuesto (opcional)" value={it.product || ''} selectedLabel={it.description} />
+                      <div>
+                        <Label>Descripción</Label>
+                        <Input type="text" name={`desc-${idx}`} value={it.description} onChange={(e) => updateItem(idx, { description: e.target.value })} placeholder="Descripción del repuesto" />
+                      </div>
+                    </div>
                   ) : (
                     <div>
                       <Label>Descripción</Label>
@@ -562,6 +616,14 @@ const EditServicePage = () => {
             {items.length === 0 && (
               <div className="text-sm text-gray-500 dark:text-gray-400">Sin ítems</div>
             )}
+          </div>
+          <div className="flex justify-end">
+            <div className="w-full md:w-1/2 lg:w-1/3 border border-gray-200 dark:border-gray-800 rounded-md p-4">
+              <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300"><span>Mano de obra (neto)</span><span>{formatCurrency(totals.laborBase)}</span></div>
+              <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300"><span>IVA mano de obra</span><span>{formatCurrency(totals.laborIva)}</span></div>
+              <div className="flex justify-between text-sm text-gray-700 dark:text-gray-300"><span>Repuestos (IVA incl.)</span><span>{formatCurrency(totals.partsTotal)}</span></div>
+              <div className="flex justify-between font-semibold text-gray-900 dark:text-white mt-2"><span>Total</span><span>{formatCurrency(totals.total)}</span></div>
+            </div>
           </div>
           <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-800">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Pagos iniciales</h3>

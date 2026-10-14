@@ -514,7 +514,7 @@ const ServicesPage = () => {
                       </TableCell>
                       <TableCell className="px-4 py-3 text-theme-sm">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Link href={`/services/${item.id}`} className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400">Ver</Link>
+                          <Link href={`/services/${item.id}`} className="px-3 py-1 text-xs text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400">Ver / Editar</Link>
                           <button onClick={() => openQuotePdf(item.id)} className="px-3 py-1 text-xs text-indigo-700 bg-indigo-100 rounded-md hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300">Presupuesto</button>
                           <button
                             onClick={() => sendQuoteWhatsapp(item)}

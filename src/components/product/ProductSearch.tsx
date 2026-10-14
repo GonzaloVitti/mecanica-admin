@@ -17,6 +17,8 @@ interface ProductSearchProps {
   disabled?: boolean;
   value?: string;
   error?: string;
+  // Nombre a mostrar si el producto seleccionado no está en la lista cargada
+  selectedLabel?: string;
 }
 
 const ProductSearch: React.FC<ProductSearchProps> = ({
@@ -26,6 +28,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({
   disabled = false,
   value = '',
   error,
+  selectedLabel,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -56,11 +59,11 @@ const ProductSearch: React.FC<ProductSearchProps> = ({
   useEffect(() => {
     if (value) {
       const product = products.find(p => p.id === value);
-      setSelectedProduct(product || null);
+      setSelectedProduct(product || (selectedLabel ? { id: value, name: selectedLabel, price: NaN, stock: NaN } : null));
     } else {
       setSelectedProduct(null);
     }
-  }, [value, products]);
+  }, [value, products, selectedLabel]);
 
   const handleSelect = (product: Product) => {
     setSelectedProduct(product);
@@ -112,9 +115,11 @@ const ProductSearch: React.FC<ProductSearchProps> = ({
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
                   {selectedProduct.name}
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  ${selectedProduct.price.toFixed(2)} • {selectedProduct.stock} en stock
-                </p>
+                {Number.isFinite(selectedProduct.price) && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    ${selectedProduct.price.toFixed(2)} • {selectedProduct.stock} en stock
+                  </p>
+                )}
               </div>
             </div>
             <button
@@ -164,8 +169,10 @@ const ProductSearch: React.FC<ProductSearchProps> = ({
             onFocus={() => setIsOpen(true)}
             onBlur={() => setTimeout(() => setIsOpen(false), 200)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && filteredProducts.length > 0) {
-                handleSelect(filteredProducts[0]);
+              if (e.key === 'Enter') {
+                // Evita que Enter envíe el formulario del servicio
+                e.preventDefault();
+                if (filteredProducts.length > 0) handleSelect(filteredProducts[0]);
               }
             }}
             disabled={disabled}

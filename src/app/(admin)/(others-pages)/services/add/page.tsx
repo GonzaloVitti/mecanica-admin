@@ -124,6 +124,13 @@ const AddServicePage = () => {
   const removeItem = (index: number) => {
     setItems(prev => prev.filter((_, i) => i !== index))
   }
+  // Permite corregir un ítem cargado con el tipo equivocado (mano de obra ↔ repuesto)
+  const changeItemType = (index: number, type: ItemType) => setItems(prev => prev.map((it, i) => {
+    if (i !== index || it.item_type === type) return it
+    return type === 'PART'
+      ? { ...it, item_type: 'PART', tax_rate: '0' }
+      : { ...it, item_type: 'LABOR', product: '', tax_rate: '21' }
+  }))
 
   const totals = useMemo(() => {
     // Mano de obra: neto + IVA aparte. Repuestos: precio final (IVA ya incluido).
@@ -364,10 +371,17 @@ const AddServicePage = () => {
         <div className="space-y-4">
           {items.map((it, idx) => (
             <div key={idx} className="grid grid-cols-1 md:grid-cols-6 gap-3 border border-gray-200 dark:border-gray-700 rounded-md p-3">
+              <div className="md:col-span-6 flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Tipo:</span>
+                <select className="h-8 rounded-md border border-gray-300 px-2 text-xs dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" value={it.item_type} onChange={(e) => changeItemType(idx, e.target.value as ItemType)}>
+                  <option value="LABOR">Mano de obra</option>
+                  <option value="PART">Repuesto</option>
+                </select>
+              </div>
               <div className="md:col-span-2">
                 {it.item_type === 'PART' ? (
                   <div className="space-y-2">
-                    <ProductSearch products={products.map(p => ({ id: p.id, name: p.name, price: Number(p.retail_price || '0'), stock: p.current_stock, barcode: p.barcode, image: p.image }))} onSelect={(pid) => { const p = products.find(x => x.id === pid); updateItem(idx, { product: pid, description: p?.name || '', unit_price: p?.retail_price || '0' }) }} placeholder="Buscar repuesto" value={it.product || ''} />
+                    <ProductSearch products={products.map(p => ({ id: p.id, name: p.name, price: Number(p.retail_price || '0'), stock: p.current_stock, barcode: p.barcode, image: p.image }))} onSelect={(pid) => { const p = products.find(x => x.id === pid); updateItem(idx, pid ? { product: pid, description: p?.name || it.description, unit_price: p?.retail_price || it.unit_price } : { product: '' }) }} placeholder="Buscar repuesto (opcional)" value={it.product || ''} />
                     <div>
                       <Label>Descripción</Label>
                       <Input type="text" name={`desc-${idx}`} value={it.description} onChange={(e) => updateItem(idx, { description: e.target.value })} placeholder="Descripción rápida del repuesto" />
